@@ -1,3 +1,4 @@
+
 # Arihant World — Complete E-Commerce Platform
 
 Premium marble artistry e-commerce website with Next.js frontend, Node.js backend API, and full Admin panel.
@@ -277,4 +278,6 @@ Then visit:
 
 ---
 
-© 2025 Arihant World. Built with ❤️
+© 2026 Arihant World. Built with ❤️
+=======
+# arihantworld.in-Ecom
