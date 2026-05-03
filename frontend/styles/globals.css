@@ -1,0 +1,187 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #b8973a;
+  --gold-light: #d4af5a;
+  --gold-dark: #8a6e20;
+  --cream: #f7f2eb;
+  --stone: #e8dfd0;
+  --charcoal: #2a2520;
+  --warm: #5c4a35;
+}
+html { scroll-behavior: smooth; overflow-x: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(42,37,32,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(42,37,32,0.35); }
+body { font-family: 'Jost', sans-serif; background-color: #f7f2eb; color: #2a2520; overflow-x: hidden; max-width: 100vw; }
+
+@layer components {
+  .btn-gold { @apply px-8 py-3 bg-gold text-white text-xs tracking-widest uppercase hover:bg-gold-dark transition-all duration-300 inline-block; }
+  .btn-outline { @apply px-8 py-3 border border-gold text-gold text-xs tracking-widest uppercase hover:bg-gold hover:text-white transition-all duration-300 inline-block; }
+  .form-input { @apply w-full border border-stone bg-white px-4 py-3 font-sans text-sm text-charcoal outline-none transition-colors focus:border-gold; }
+  .form-label { @apply block text-[0.65rem] tracking-widest uppercase text-warm mb-1.5 opacity-70; }
+  .section-tag { @apply text-gold text-xs tracking-[0.4em] uppercase block mb-3; }
+  .nav-link { @apply text-sm tracking-widest uppercase text-white/80 hover:text-gold transition-colors duration-300; }
+  .status-badge { @apply text-[0.65rem] tracking-widest uppercase px-2 py-0.5 font-sans inline-block border; }
+  .status-delivered { @apply bg-green-50 text-green-700 border-green-200; }
+  .status-shipped { @apply bg-blue-50 text-blue-700 border-blue-200; }
+  .status-processing { @apply bg-amber-50 text-amber-700 border-amber-200; }
+  .status-cancelled { @apply bg-red-50 text-red-600 border-red-200; }
+  .status-pending { @apply bg-gray-50 text-gray-600 border-gray-200; }
+}
+
+.hero-bg { background: linear-gradient(160deg, #0d0a06 0%, #1a1208 45%, #120e08 100%); min-height:100svh; }
+.hero-bg::after { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at 30% 50%, rgba(184,151,58,0.08) 0%, transparent 60%), radial-gradient(ellipse at 70% 30%, rgba(255,255,255,0.04) 0%, transparent 50%); }
+.hero-content { animation: heroReveal 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards; opacity: 0; }
+@keyframes heroReveal { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+.marquee-track { animation: marquee 30s linear infinite; width: max-content; display: flex; flex-shrink: 0; }
+@keyframes marquee { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+.fade-in { opacity:0; transform:translateY(24px); transition:opacity 0.7s ease, transform 0.7s ease; }
+.fade-in.visible { opacity:1; transform:translateY(0); }
+.product-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); overflow:hidden; transition:all 0.4s ease; cursor:pointer; }
+.product-card:hover { border-color:var(--gold); transform:translateY(-4px); box-shadow:0 20px 40px rgba(0,0,0,0.3); }
+.product-img img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.product-img { width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,rgba(184,151,58,0.08),rgba(255,255,255,0.04)); overflow:hidden; position:relative; }
+.product-badge { position:absolute; top:10px; left:10px; background:var(--gold); color:white; font-size:10px; letter-spacing:0.15em; text-transform:uppercase; padding:3px 8px; }
+.product-info { padding:14px 16px 16px; }
+.product-name { font-family:'Cormorant Garamond',serif; font-size:1rem; color:rgba(255,255,255,0.9); margin-bottom:4px; }
+.product-price { font-size:0.75rem; letter-spacing:0.1em; color:var(--gold); }
+.product-original { color:rgba(255,255,255,0.25); text-decoration:line-through; margin-right:6px; }
+.furniture-card { background:white; border:1px solid var(--stone); overflow:hidden; transition:all 0.4s ease; cursor:pointer; }
+.furniture-card:hover { border-color:var(--gold); box-shadow:0 16px 40px rgba(184,151,58,0.12); transform:translateY(-4px); }
+.furniture-img { width:100%; aspect-ratio:4/3; background:linear-gradient(135deg,#f0e8d8,#e8dfd0); display:flex; align-items:center; justify-content:center; }
+.furniture-info { padding:16px 20px 20px; }
+.furniture-name { font-family:'Cormorant Garamond',serif; font-size:1.1rem; color:var(--charcoal); margin-bottom:4px; }
+.furniture-price { font-size:0.8rem; letter-spacing:0.1em; color:var(--gold); }
+.tab-btn { background:transparent; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.4); cursor:pointer; transition:all 0.3s; font-family:'Jost',sans-serif; font-size:0.7rem; letter-spacing:0.2em; text-transform:uppercase; padding:8px 20px; }
+.tab-btn:hover, .tab-btn.active-tab { background:var(--gold); border-color:var(--gold); color:white; }
+.furn-tab { background:transparent; border:1px solid var(--stone); color:var(--warm); cursor:pointer; transition:all 0.3s; font-family:'Jost',sans-serif; font-size:0.7rem; letter-spacing:0.2em; text-transform:uppercase; padding:8px 20px; }
+.furn-tab.active-furn { background:var(--charcoal); color:white; border-color:var(--charcoal); }
+.decor-tab { background:transparent; cursor:pointer; transition:all 0.3s; font-family:'Jost',sans-serif; font-size:0.7rem; letter-spacing:0.2em; text-transform:uppercase; padding:8px 20px; border-radius:9999px; border:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.5); }
+.decor-tab.active-decor { border-color:var(--gold); color:var(--gold); background:rgba(184,151,58,0.08); }
+.process-step { position:relative; }
+.process-step:not(:last-child)::after { content:''; position:absolute; top:32px; left:calc(50% + 32px); width:calc(100% - 64px); height:1px; background:linear-gradient(to right, var(--gold), rgba(184,151,58,0.2)); }
+@media (max-width:768px) { .process-step::after { display:none; } }
+.collection-item { cursor:pointer; text-align:center; transition:transform 0.3s ease; }
+.collection-item:hover { transform:translateY(-4px); }
+.collection-circle { width:90px; height:90px; border-radius:50%; margin:0 auto 10px; border:2px solid rgba(184,151,58,0.3); display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,rgba(184,151,58,0.1),rgba(255,255,255,0.03)); transition:border-color 0.3s,background 0.3s; overflow:hidden; }
+.collection-item:hover .collection-circle { border-color:var(--gold); background:linear-gradient(135deg,rgba(184,151,58,0.2),rgba(255,255,255,0.05)); }
+.collection-name { font-size:0.65rem; letter-spacing:0.2em; text-transform:uppercase; color:rgba(255,255,255,0.5); }
+.review-card { background:white; border:1px solid var(--stone); padding:28px; transition:all 0.3s ease; }
+.review-card:hover { border-color:var(--gold); box-shadow:0 12px 30px rgba(184,151,58,0.08); transform:translateY(-2px); }
+.faq-item { border:1px solid var(--stone); background:white; overflow:hidden; transition:border-color 0.3s; }
+.faq-item.open { border-color:var(--gold); }
+.faq-question { padding:20px 24px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:12px; font-family:'Cormorant Garamond',serif; font-size:1.1rem; color:var(--charcoal); transition:color 0.3s; }
+.faq-item.open .faq-question { color:var(--gold); }
+.faq-icon { width:24px; height:24px; border:1px solid var(--stone); border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; transition:all 0.3s; color:var(--warm); }
+.faq-item.open .faq-icon { background:var(--gold); border-color:var(--gold); color:white; transform:rotate(45deg); }
+.faq-answer { max-height:0; overflow:hidden; transition:max-height 0.4s ease, padding 0.3s ease; font-size:0.9rem; color:var(--warm); line-height:1.7; }
+.faq-answer.open { max-height:300px; padding:0 24px 20px; }
+.philosophy-img-grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:220px 180px; gap:12px; }
+.img-box { border-radius:4px; overflow:hidden; transition:transform 0.4s ease; }
+.img-box:hover { transform:scale(1.02); }
+.img-box-1 { grid-column:1/3; }
+.img-box-2 { grid-column:1/2; }
+.img-box-3 { grid-column:2/3; }
+.guide-card { background:white; border:1px solid var(--stone); overflow:hidden; transition:all 0.4s ease; cursor:pointer; }
+.guide-card:hover { transform:translateY(-4px); border-color:var(--gold); box-shadow:0 16px 40px rgba(184,151,58,0.1); }
+@media (max-width:640px) { .philosophy-img-grid { grid-template-rows:160px 130px; } .process-step::after { display:none; } }
+
+/* ── Additional responsive utilities ── */
+.line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.xs\:block { display:block; }
+@media (min-width:480px) { .xs\:block { display:block; } }
+
+/* ── Mobile responsive fixes ── */
+@media (max-width:640px) {
+  .font-serif.text-5xl { font-size:2.5rem; }
+  .font-serif.text-6xl { font-size:3rem; }
+  .font-serif.text-7xl { font-size:3.5rem; }
+}
+
+/* ── Admin table ── */
+.admin-table { width:100%; border-collapse:collapse; }
+.admin-table th { text-align:left; padding:10px 16px; font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase; color:#9ca3af; background:#f9fafb; border-bottom:1px solid #f3f4f6; font-weight:normal; }
+.admin-table td { padding:12px 16px; font-size:0.875rem; color:#374151; border-bottom:1px solid #f9fafb; }
+.admin-table tr:hover td { background:#f9fafb; }
+
+/* ── Wallet toggle fix ── */
+.translate-x-0\.5 { transform:translateX(2px); }
+.left-5\.5 { left:22px; }
+
+/* ═══════════════════════════════════════════════
+   ECOMMERCE ANIMATIONS
+   ════════════════════════════════════════════════ */
+
+/* Page entry animation */
+@keyframes pageIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+.page-enter { animation: pageIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+/* Product card pop-in stagger */
+@keyframes cardIn { from { opacity:0; transform:translateY(24px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+.card-enter { animation: cardIn 0.45s cubic-bezier(0.22,1,0.36,1) both; }
+.card-enter:nth-child(1) { animation-delay:0.05s; }
+.card-enter:nth-child(2) { animation-delay:0.1s; }
+.card-enter:nth-child(3) { animation-delay:0.15s; }
+.card-enter:nth-child(4) { animation-delay:0.2s; }
+.card-enter:nth-child(5) { animation-delay:0.25s; }
+.card-enter:nth-child(6) { animation-delay:0.3s; }
+.card-enter:nth-child(7) { animation-delay:0.35s; }
+.card-enter:nth-child(8) { animation-delay:0.4s; }
+
+/* Shimmer skeleton loader */
+@keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+.skeleton { background:linear-gradient(90deg,#e8dfd0 25%,#f0e8d8 50%,#e8dfd0 75%); background-size:400px 100%; animation:shimmer 1.4s infinite linear; }
+
+/* Gold pulse glow for CTAs */
+@keyframes goldPulse { 0%,100%{box-shadow:0 0 0 0 rgba(184,151,58,0.3)} 50%{box-shadow:0 0 0 8px rgba(184,151,58,0)} }
+.btn-gold-pulse { animation: goldPulse 2.5s infinite; }
+
+/* Floating cart badge */
+@keyframes badgePop { 0%{transform:scale(0)} 60%{transform:scale(1.3)} 100%{transform:scale(1)} }
+.badge-pop { animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+
+/* Smooth image zoom on hover (applied via tailwind group-hover) */
+
+/* Toast slide-in from right */
+@keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+
+/* Wishlist heart animation */
+@keyframes heartBeat { 0%{transform:scale(1)} 25%{transform:scale(1.3)} 50%{transform:scale(1)} 75%{transform:scale(1.15)} 100%{transform:scale(1)} }
+.heart-beat { animation: heartBeat 0.4s ease-in-out; }
+
+/* Price strike-through reveal */
+@keyframes strikeReveal { from{width:0} to{width:100%} }
+
+/* Section reveal with slight blur */
+@keyframes sectionReveal { from{opacity:0;filter:blur(4px);transform:translateY(20px)} to{opacity:1;filter:blur(0);transform:translateY(0)} }
+.section-reveal { animation: sectionReveal 0.6s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+/* Smooth accordion */
+.faq-answer { overflow:hidden; transition:max-height 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease; }
+
+/* Admin sidebar active indicator */
+@keyframes slideIn { from{transform:scaleY(0)} to{transform:scaleY(1)} }
+
+/* Gold shimmer text */
+@keyframes goldShimmer { 0%{background-position:0% 50%} 100%{background-position:200% 50%} }
+.text-shimmer { background:linear-gradient(90deg,#b8973a,#d4af5a,#b8973a); background-size:200%; -webkit-background-clip:text; -webkit-text-fill-color:transparent; animation:goldShimmer 3s linear infinite; }
+
+/* Smooth scroll for whole page */
+html { scroll-behavior:smooth; }
+
+/* Add to cart button ripple */
+@keyframes ripple { 0%{transform:scale(0);opacity:0.5} 100%{transform:scale(4);opacity:0} }
+.ripple-effect::after { content:''; position:absolute; inset:0; border-radius:inherit; background:rgba(255,255,255,0.3); transform:scale(0); opacity:0; }
+.ripple-effect:active::after { animation:ripple 0.4s ease-out; }
+
+/* Sticky header slide-down */
+@keyframes slideDown { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+
+/* Page transition slide-up toast */
+@keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
