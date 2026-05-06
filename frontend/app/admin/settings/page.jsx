@@ -362,7 +362,10 @@ export default function AdminSettingsPage() {
                                   if (!file) return
                                   const fd = new FormData(); fd.append('image', file)
                                   try {
-                                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL?.replace('/api','') || 'http://localhost:5000'}/api/admin/products/upload-image`, {
+                                    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+                                    // Base URL without /api suffix — use this for direct fetch calls (invoices etc.)
+                                    const BASE_URL = API_URL.replace(/\/api$/, '')
+                                    const res = await fetch(`${BASE_URL}/api/admin/products/upload-image`, {
                                       method:'POST', headers:{ Authorization:`Bearer ${document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('token='))?.split('=')[1]||''}` }, body:fd
                                     })
                                     const data = await res.json()

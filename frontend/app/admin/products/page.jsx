@@ -14,8 +14,9 @@ const EMPTY_FORM = {
   badge:null, isFeatured:false, isCustom:false, craftingDays:'7',
   finish:'Polished', sizes:'9",12",18",24",36",Custom', tags:'',
   dimensions:{ height:'', width:'', depth:'', weight:'' },
-  numReviews: 0, rating: 0
+  numReviews: 0, rating: 0,
 }
+
 
 const validate = (form) => {
   const e = {}
@@ -201,6 +202,8 @@ export default function AdminProductsPage() {
         salePrice: form.salePrice ? Number(form.salePrice) : null,
         stock: Number(form.stock),
         craftingDays: Number(form.craftingDays),
+        rating: parseFloat(form.rating) || 0,
+        numReviews: parseInt(form.numReviews) || 0,
         finish: form.finish.split(',').map(s => s.trim()).filter(Boolean),
         sizes: form.sizes.split(',').map(s => s.trim()).filter(Boolean),
         sizeVariants: (form.sizeVariants || [])
@@ -462,6 +465,57 @@ export default function AdminProductsPage() {
                   <p className="text-[10px] text-gray-400 mt-0.5">Estimated production time</p>
                 </div>
 
+                {/* ── Review Stats (Admin Override) ── */}
+                <div className="sm:col-span-2">
+                  <div className="border border-amber-200 bg-amber-50/60 rounded-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-amber-600 text-base">⭐</span>
+                      <label className="text-[11px] tracking-widest uppercase text-amber-700 font-semibold">Review Stats (shown on product page)</label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="form-label">Average Rating</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={form.rating}
+                            onChange={e => {
+                              const val = Math.min(5, Math.max(0, parseFloat(e.target.value) || 0))
+                              set('rating', parseFloat(val.toFixed(1)))
+                            }}
+                            className="form-input pr-16"
+                            placeholder="4.8"
+                            min="0" max="5" step="0.1"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gold text-sm pointer-events-none">
+                            {'★'.repeat(Math.round(form.rating || 0))}{'☆'.repeat(5 - Math.round(form.rating || 0))}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">0.0 – 5.0 · e.g. 4.8</p>
+                      </div>
+                      <div>
+                        <label className="form-label">Total Reviews Count</label>
+                        <input
+                          type="number"
+                          value={form.numReviews}
+                          onChange={e => set('numReviews', Math.max(0, parseInt(e.target.value) || 0))}
+                          className="form-input"
+                          placeholder="128"
+                          min="0"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Shown as "(X reviews)" on product page</p>
+                      </div>
+                    </div>
+                    {/* Live preview */}
+                    <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-2">
+                      <span className="text-[10px] text-amber-700 uppercase tracking-widest">Preview →</span>
+                      <span className="text-gold text-sm">{'★'.repeat(Math.round(form.rating || 0))}{'☆'.repeat(5 - Math.round(form.rating || 0))}</span>
+                      <span className="text-xs text-warm/60">({form.numReviews || 0} reviews)</span>
+                      {form.rating > 0 && <span className="text-xs font-medium text-charcoal">{(form.rating || 0).toFixed(1)}</span>}
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="form-label">Material</label>
                   <input value={form.material} onChange={e => set('material',e.target.value)} className="form-input" placeholder="Makrana Marble"/>
@@ -469,95 +523,127 @@ export default function AdminProductsPage() {
                 <div>
                   <label className="form-label">Sizes <span className="text-gray-400 font-normal normal-case text-[10px]">(comma separated — for display)</span></label>
                   <input value={form.sizes} onChange={e => set('sizes',e.target.value)} className="form-input" placeholder='9",12",18",24",36",Custom'/>
+                </div>
 
                 {/* ── Size Variants with Individual Pricing ── */}
-                <div className="sm:col-span-2">
-                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="col-span-1 sm:col-span-2">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                     <div>
                       <label className="form-label mb-0">Size Variants with Individual Pricing</label>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Each size can have its own price. When customer selects a size, price updates on the product page.</p>
+                      <p className="text-xs text-gray-400 mt-1 leading-relaxed">Each size can have its own price. When customer selects a size, price updates on the product page.</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => set('sizeVariants', [...(form.sizeVariants || []), { size: '', price: '', salePrice: '', stock: '' }])}
-                      className="px-3 py-1.5 text-xs border border-gold text-gold hover:bg-gold hover:text-white transition-all tracking-widest uppercase whitespace-nowrap flex-shrink-0"
+                      className="px-4 py-2 text-xs border border-gold text-gold hover:bg-gold hover:text-white transition-all tracking-widest uppercase whitespace-nowrap flex-shrink-0 font-medium"
                     >
                       + Add Size
                     </button>
                   </div>
+
                   {(form.sizeVariants || []).length === 0 ? (
-                    <div className="border border-dashed border-gray-200 p-4 text-center text-gray-400 text-xs">
-                      No size variants yet. Click "+ Add Size" to add sizes with individual pricing.
+                    <div className="border border-dashed border-gray-200 p-6 text-center text-gray-400 text-sm rounded-sm bg-gray-50/50">
+                      No size variants yet. Click <span className="text-gold font-medium">"+ Add Size"</span> to add sizes with individual pricing.
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {/* Header - only on desktop */}
-                      <div className="hidden sm:grid grid-cols-5 gap-3 text-[10px] tracking-widest uppercase text-gray-400 px-1">
-                        <span>Size</span>
-                        <span>Price (₹) *</span>
-                        <span>Sale Price (₹)</span>
-                        <span>Stock</span>
-                        <span></span>
+                    <div className="space-y-3">
+
+                      {/* Column headers */}
+                      <div className="grid gap-2 px-1" style={{gridTemplateColumns: '1fr 1fr 1fr 1fr 90px'}}>
+                        {['Size', 'Price (₹) *', 'Sale Price (₹)', 'Stock', ''].map((h, idx) => (
+                          <span key={idx} className="text-[10px] tracking-widest uppercase text-gray-500 font-semibold">{h}</span>
+                        ))}
                       </div>
+
                       {(form.sizeVariants || []).map((sv, i) => (
-                        <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center bg-stone/20 p-3 rounded-sm border border-stone/40">
-                          <div>
-                            <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1 sm:hidden">Size</label>
+                        <div key={i} className="bg-amber-50/50 border border-amber-100 rounded-sm p-3">
+
+                          {/* Desktop row */}
+                          <div className="grid gap-2 items-center" style={{gridTemplateColumns: '1fr 1fr 1fr 1fr 90px'}}>
                             <input
                               value={sv.size}
                               onChange={e => { const arr = [...form.sizeVariants]; arr[i] = { ...arr[i], size: e.target.value }; set('sizeVariants', arr) }}
-                              className="form-input w-full"
-                              placeholder='e.g. 12"'
+                              style={{fontSize:'15px', padding:'10px 12px', height:'44px'}}
+                              className="w-full border-2 border-gray-300 bg-white text-charcoal outline-none focus:border-gold transition-colors rounded-sm font-medium"
+                              placeholder='12"'
                             />
-                          </div>
-                          <div>
-                            <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1 sm:hidden">Price (₹) *</label>
                             <input
                               type="number"
                               value={sv.price}
                               onChange={e => { const arr = [...form.sizeVariants]; arr[i] = { ...arr[i], price: e.target.value }; set('sizeVariants', arr) }}
-                              className="form-input w-full"
+                              style={{fontSize:'15px', padding:'10px 12px', height:'44px'}}
+                              className="w-full border-2 border-gray-300 bg-white text-charcoal outline-none focus:border-gold transition-colors rounded-sm"
                               placeholder="18500"
                               min="0"
                             />
-                          </div>
-                          <div>
-                            <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1 sm:hidden">Sale Price (₹)</label>
                             <input
                               type="number"
                               value={sv.salePrice}
                               onChange={e => { const arr = [...form.sizeVariants]; arr[i] = { ...arr[i], salePrice: e.target.value }; set('sizeVariants', arr) }}
-                              className="form-input w-full"
-                              placeholder="Leave blank"
+                              style={{fontSize:'15px', padding:'10px 12px', height:'44px'}}
+                              className="w-full border-2 border-gray-300 bg-white text-charcoal outline-none focus:border-gold transition-colors rounded-sm"
+                              placeholder="Optional"
                               min="0"
                             />
-                          </div>
-                          <div>
-                            <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1 sm:hidden">Stock</label>
                             <input
                               type="number"
                               value={sv.stock}
                               onChange={e => { const arr = [...form.sizeVariants]; arr[i] = { ...arr[i], stock: e.target.value }; set('sizeVariants', arr) }}
-                              className="form-input w-full"
+                              style={{fontSize:'15px', padding:'10px 12px', height:'44px'}}
+                              className="w-full border-2 border-gray-300 bg-white text-charcoal outline-none focus:border-gold transition-colors rounded-sm"
                               placeholder="Qty"
                               min="0"
                             />
+                            <button
+                              type="button"
+                              onClick={() => set('sizeVariants', form.sizeVariants.filter((_, j) => j !== i))}
+                              style={{height:'44px'}}
+                              className="w-full flex items-center justify-center gap-1 text-red-400 hover:text-red-600 border border-red-200 text-xs hover:bg-red-50 transition-all rounded-sm"
+                            >
+                              ✕ Remove
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => set('sizeVariants', form.sizeVariants.filter((_, j) => j !== i))}
-                            className="w-full sm:w-auto text-red-400 hover:text-red-600 border border-red-200 px-3 py-2.5 text-xs hover:bg-red-50 transition-all text-center rounded-sm"
-                          >
-                            ✕ Remove
-                          </button>
+
+                          {/* Mobile stacked (below sm) */}
+                          <div className="sm:hidden mt-3 grid grid-cols-2 gap-2">
+                            {[
+                              { label: 'Size', key: 'size', type: 'text', ph: '12"' },
+                              { label: 'Price (₹) *', key: 'price', type: 'number', ph: '18500' },
+                              { label: 'Sale Price (₹)', key: 'salePrice', type: 'number', ph: 'Optional' },
+                              { label: 'Stock', key: 'stock', type: 'number', ph: 'Qty' },
+                            ].map(({ label, key, type, ph }) => (
+                              <div key={key}>
+                                <label className="text-[10px] tracking-widest uppercase text-gray-500 font-semibold block mb-1">{label}</label>
+                                <input
+                                  type={type}
+                                  value={sv[key]}
+                                  onChange={e => { const arr = [...form.sizeVariants]; arr[i] = { ...arr[i], [key]: e.target.value }; set('sizeVariants', arr) }}
+                                  className="w-full border-2 border-gray-300 bg-white px-3 py-3 text-base text-charcoal outline-none focus:border-gold transition-colors rounded-sm"
+                                  placeholder={ph}
+                                  min={type === 'number' ? '0' : undefined}
+                                />
+                              </div>
+                            ))}
+                            <div className="col-span-2 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => set('sizeVariants', form.sizeVariants.filter((_, j) => j !== i))}
+                                className="w-full text-red-400 hover:text-red-600 border border-red-200 py-2.5 text-xs hover:bg-red-50 transition-all rounded-sm font-medium tracking-widest uppercase"
+                              >
+                                ✕ Remove This Size
+                              </button>
+                            </div>
+                          </div>
+
                         </div>
                       ))}
-                      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 mt-1">
-                        ⚡ Price on product page will automatically change when customer selects a size.
+
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-4 py-3 rounded-sm flex items-center gap-2">
+                        <span className="text-base">⚡</span>
+                        Price on product page will automatically change when customer selects a size.
                       </p>
                     </div>
                   )}
-                </div>
                 </div>
 
                 <div className="sm:col-span-2">

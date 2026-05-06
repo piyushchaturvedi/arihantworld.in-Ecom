@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import Loader from '@/components/ui/Loader'
-import { useCartStore, useWishlistStore, useAuthStore } from '@/lib/store'
+import { useCartStore, useWishlistStore } from '@/lib/store'
 import { productsAPI } from '@/lib/api'
 import { fmt } from '@/lib/config'
 import { useSettings } from '@/components/providers/SettingsProvider'
@@ -39,13 +39,11 @@ export default function ProductDetailPage() {
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [reviewText, setReviewText] = useState('')
   const [reviewRating, setReviewRating] = useState(5)
-  const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [reviews, setReviews] = useState([])
   const [related, setRelated] = useState([])
   const settings = useSettings()
   const { addItem } = useCartStore()
   const { addItem: addWish, isWishlisted, removeItem: removeWish } = useWishlistStore()
-  const { user, isAuthenticated } = useAuthStore()
 
   useEffect(() => {
     setLoading(true)
@@ -60,8 +58,6 @@ export default function ProductDetailPage() {
     p = data.product
 
     setProduct(p)
-    // ✅ Load existing reviews from product
-    setReviews(p?.reviews || [])
     setSelectedSize(p?.sizes?.[2] || p?.sizes?.[0] || '18"')
     setSelectedFinish(Array.isArray(p?.finish) ? p.finish[0] : p?.finish || 'Polished')
 
@@ -79,6 +75,7 @@ export default function ProductDetailPage() {
     setRelated([])
   }
 
+  setReviews([])
   setLoading(false)
 }
 
@@ -189,57 +186,12 @@ export default function ProductDetailPage() {
     toast(wishlisted ? 'Removed from wishlist' : 'Added to wishlist', { icon: wishlisted ? '💔' : '❤️' })
   }
 
-  const handleReviewSubmit = async (e) => {
+  const handleReviewSubmit = (e) => {
     e.preventDefault()
-    if (!reviewText.trim()) return toast.error('Please write your review')
-    if (!isAuthenticated) return toast.error('Please login to submit a review')
-
-    // Check if already reviewed
-    const already = reviews.find(r => r.user?._id === user?._id || r.user === user?._id)
-    if (already) return toast.error('You have already reviewed this product')
-
-    setReviewSubmitting(true)
-    try {
-      // ✅ Use product._id for API call (backend needs ObjectId)
-      const { data } = await productsAPI.addReview(product._id, { rating: reviewRating, comment: reviewText.trim() })
-
-      // Use the real saved review from DB (has real _id + createdAt)
-      const savedReview = data.review || {
-        _id: Date.now().toString(),
-        user: { _id: user._id, firstName: user.firstName, lastName: user.lastName },
-        name: `${user.firstName} ${user.lastName}`,
-        rating: reviewRating,
-        comment: reviewText.trim(),
-        createdAt: new Date().toISOString(),
-        isVerifiedPurchase: false,
-      }
-      setReviews(prev => [savedReview, ...prev])
-
-      // Update product rating with values returned from backend
-      setProduct(prev => ({
-        ...prev,
-        numReviews: data.numReviews ?? (prev.numReviews || 0) + 1,
-        rating: data.rating ?? prev.rating,
-      }))
-
-      setReviewText('')
-      setReviewRating(5)
-      toast.success('Review submitted successfully!')
-
-      // ✅ Re-fetch product to get fresh reviews from DB (bypasses any cache)
-      try {
-        const { data: fresh } = await productsAPI.getOne(product.slug || product._id, true) // true = bypass cache
-        if (fresh?.product) {
-          setProduct(fresh.product)
-          setReviews(fresh.product.reviews || [])
-        }
-      } catch { /* keep optimistic data if re-fetch fails */ }
-    } catch (err) {
-      const msg = err?.response?.data?.message || 'Failed to submit review'
-      toast.error(msg)
-    } finally {
-      setReviewSubmitting(false)
-    }
+    if (!reviewText.trim()) return
+    setReviews(prev => [{ id:Date.now(), name:'You', city:'', rating:reviewRating, date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}), verified:false, comment:reviewText }, ...prev])
+    setReviewText('')
+    toast.success('Review submitted!')
   }
 
   return (
@@ -261,7 +213,7 @@ export default function ProductDetailPage() {
             {/* ── LEFT: Images ── */}
             <div>
               {/* Main image */}
-              <div className="relative bg-gradient-to-br from-stone to-cream aspect-square flex items-center justify-center overflow-hidden group">
+              <div className="relative bg-gradient-to-br from-stone to-cream border border-stone aspect-square flex items-center justify-center overflow-hidden group">
                 {currentImg.url && !imgError[activeImg] ? (
                   <div
                     className="w-full h-full overflow-hidden cursor-zoom-in"
@@ -352,7 +304,7 @@ export default function ProductDetailPage() {
                 )}
               </div>
 
-              <p className="text-warm/70 text-sm leading-relaxed mb-6">
+              <p className="text-warm/70 text-sm leading-relaxed mb-6 border-l-2 border-gold/30 pl-4">
                 {product.description || product.shortDescription}
               </p>
 
@@ -466,7 +418,7 @@ export default function ProductDetailPage() {
               </div>
 }
               {product.craftingDays && (
-                <div className="mt-4 bg-stone/40 border border-stone px-4 py-3 text-sm text-warm/70">
+                <div className="mt-4 bg-gold/5 border border-gold/20 px-4 py-3 text-sm text-warm/70">
                   ⏱ Estimated crafting: <strong className="text-charcoal">{product.craftingDays}–{product.craftingDays + 7} days</strong>
                 </div>
               )}
@@ -565,40 +517,24 @@ export default function ProductDetailPage() {
                           <textarea value={reviewText} onChange={e => setReviewText(e.target.value)}
                             className="form-input h-24 resize-none" placeholder="Share your experience…" required/>
                         </div>
-                        <button type="submit" disabled={reviewSubmitting}
-                          className="btn-gold disabled:opacity-50 disabled:cursor-not-allowed">
-                          {reviewSubmitting ? 'Submitting…' : 'Submit Review'}
-                        </button>
-                        {!isAuthenticated && (
-                          <p className="text-xs text-warm/50 mt-1">
-                            <Link href="/auth/login" className="text-gold underline">Login</Link> to submit a review
-                          </p>
-                        )}
+                        <button type="submit" className="btn-gold">Submit Review</button>
                       </form>
                     </div>
                   </div>
                   <div className="space-y-4">
-                    {reviews.length === 0 && (
-                      <p className="text-center text-warm/40 text-sm py-6">No reviews yet. Be the first to review!</p>
-                    )}
                     {reviews.map(r => (
-                      <div key={r._id || r.id} className="bg-white border border-stone p-5">
+                      <div key={r.id} className="bg-white border border-stone p-5">
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="font-medium text-charcoal text-sm">
-                                {r.name || `${r.user?.firstName || ''} ${r.user?.lastName || ''}`.trim() || 'Customer'}
-                              </p>
+                              <p className="font-medium text-charcoal text-sm">{r.name}</p>
+                              {r.city && <span className="text-warm/40 text-xs">{r.city}</span>}
                             </div>
-                            <div className="flex text-gold text-sm mt-0.5">{'★'.repeat(Math.max(1, Math.min(5, r.rating || 5)))}</div>
+                            <div className="flex text-gold text-sm mt-0.5">{'★'.repeat(r.rating)}</div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-warm/40">
-                              {r.createdAt
-                                ? new Date(r.createdAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
-                                : r.date || ''}
-                            </p>
-                            {r.isVerifiedPurchase && <p className="text-[10px] text-green-600 mt-0.5">✓ Verified Purchase</p>}
+                            <p className="text-xs text-warm/40">{r.date}</p>
+                            {r.verified && <p className="text-[10px] text-green-600 mt-0.5">✓ Verified Purchase</p>}
                           </div>
                         </div>
                         <p className="text-warm/70 text-sm leading-relaxed font-serif italic">"{r.comment}"</p>

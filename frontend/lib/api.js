@@ -38,7 +38,8 @@ export const authAPI = {
 
 export const productsAPI = {
   getAll: (params) => api.get('/products', { params }),
-  getOne: (id) => api.get(`/products/${id}`),
+  getOne: (id, bustCache = false) => api.get(`/products/${id}`, bustCache ? { params: { _t: Date.now() } } : {}),
+  getHomepage: () => api.get('/products/homepage'),
   getFeatured: () => api.get('/products/featured'),
   getCategories: () => api.get('/products/categories'),
   addReview: (id, data) => api.post(`/products/${id}/reviews`, data),

@@ -137,35 +137,34 @@ export default function HomePage() {
   const [email, setEmail] = useState('')
   const handleEmailChange = useCallback((e) => setEmail(e.target.value), [])
 
-  // Products from API
-  const [allProducts, setAllProducts] = useState([])
+  // Products from API — targeted homepage endpoint (4 per category, parallel DB queries)
+  const [murtis,       setMurtis]       = useState([])
+  const [furniture,    setFurniture]    = useState([])
+  const [decor,        setDecor]        = useState([])
+  const [murtiSubcats, setMurtiSubcats] = useState([])
   const [productsLoading, setProductsLoading] = useState(true)
 
   useEffect(() => {
-    const loadAllProducts = async () => {
-      try {
-        const { data } = await productsAPI.getAll({ limit: 50 })
-        if (data.products?.length > 0) {
-          setAllProducts(data.products)
-        } else {
-          setAllProducts([])
+    productsAPI.getHomepage()
+      .then(({ data }) => {
+        if (data.success) {
+          setMurtis(data.murtis      || [])
+          setFurniture(data.furniture || [])
+          setDecor(data.decor         || [])
+          setMurtiSubcats(data.murtiSubcats || [])
         }
-      } catch {
-        setAllProducts([])
-      } finally {
-        setProductsLoading(false)
-      }
-    }
-    loadAllProducts()
+      })
+      .catch(() => {})
+      .finally(() => setProductsLoading(false))
   }, [])
 
-  // Derive product lists from fetched data
-  const murtis    = allProducts.filter(p => p.category === 'murtis')
-  const furniture = allProducts.filter(p => p.category === 'furniture')
-  const decor     = allProducts.filter(p => p.category === 'decor')
-  const featured  = allProducts.filter(p => p.isFeatured).slice(0, 8)
-
-  const murtiFiltered = murtiTab === 'all' ? murtis : murtis.filter(p => p.material?.toLowerCase().includes(murtiTab.toLowerCase()) || p.subcategory?.toLowerCase().includes(murtiTab.toLowerCase()))
+  // Murti tab filter (client-side on only 4-N records already fetched)
+  const murtiFiltered = murtiTab === 'all'
+    ? murtis
+    : murtis.filter(p =>
+        p.material?.toLowerCase().includes(murtiTab.toLowerCase()) ||
+        p.subcategory?.toLowerCase().includes(murtiTab.toLowerCase())
+      )
   
   const cats = settings.categories || []
   const displayCategories = cats.filter(c => c.slug !== 'custom')
@@ -291,7 +290,7 @@ export default function HomePage() {
           {/* Tabs */}
           {murtis.length > 0 && (
             <div className="flex gap-2 mb-8 flex-wrap">
-              {['all', ...Array.from(new Set(murtis.map(p => p.subcategory).filter(Boolean)))].map(t => (
+              {['all', ...murtiSubcats].map(t => (
                 <button key={t} onClick={() => setMurtiTab(t)}
                   className={`tab-btn capitalize ${murtiTab === t ? 'active-tab' : ''}`}>
                   {t}

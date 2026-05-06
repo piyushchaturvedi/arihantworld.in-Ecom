@@ -8,7 +8,6 @@ const envFile = process.env.NODE_ENV === 'production'
   ? '.env.production'
   : '.env.development'
 
-// Load env: .env.{NODE_ENV} first, then fallback to .env
 const envPath = path.resolve(__dirname, envFile)
 const fallbackPath = path.resolve(__dirname, '.env')
 
@@ -20,28 +19,38 @@ if (result.error) {
   console.log(`✅ Loaded env: ${envFile}`)
 }
 
-const express      = require('express')
-const mongoose     = require('mongoose')
-const cors         = require('cors')
-const helmet       = require('helmet')
-const morgan       = require('morgan')
+const express       = require('express')
+const mongoose      = require('mongoose')
+const cors          = require('cors')
+const helmet        = require('helmet')
+const morgan        = require('morgan')
+const compression   = require('compression')           // ✅ NEW: gzip responses
 const mongoSanitize = require('express-mongo-sanitize')
-const rateLimit    = require('express-rate-limit')
+const rateLimit     = require('express-rate-limit')
 
-const app = express()
+const app    = express()
 const isProd = process.env.NODE_ENV === 'production'
+
+// ─── Compression (gzip) — biggest win for free ────────────────────────────
+// Compress all responses > 1KB. Saves 60-70% bandwidth = faster response.
+app.use(compression({
+  level: 6,           // balanced speed vs compression
+  threshold: 1024,    // only compress responses > 1KB
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false
+    return compression.filter(req, res)
+  },
+}))
 
 // ─── Security headers ──────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: isProd ? undefined : false, // relax CSP in dev
+  contentSecurityPolicy: isProd ? undefined : false,
 }))
 app.use(mongoSanitize())
 
 // ─── Trust proxy (Nginx sits in front in production) ──────────────────────
-if (isProd) {
-  app.set('trust proxy', 1)
-}
+if (isProd) app.set('trust proxy', 1)
 
 // ─── Rate limiting ─────────────────────────────────────────────────────────
 const limiter = rateLimit({
@@ -60,26 +69,19 @@ app.use('/api/', limiter)
 
 // ─── CORS ──────────────────────────────────────────────────────────────────
 const getAllowedOrigins = () => {
-  if (!isProd) return true  // allow all in development
-
+  if (!isProd) return true
   const origins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '')
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean)
-
-  // Always allow the API subdomain itself (for health checks etc.)
-  if (process.env.API_SUBDOMAIN) {
-    origins.push(`https://${process.env.API_SUBDOMAIN}`)
-  }
+    .split(',').map(o => o.trim()).filter(Boolean)
+  if (process.env.API_SUBDOMAIN) origins.push(`https://${process.env.API_SUBDOMAIN}`)
   return origins
 }
 
 app.use(cors({
   origin: (origin, callback) => {
     const allowed = getAllowedOrigins()
-    if (allowed === true) return callback(null, true)           // dev: allow all
-    if (!origin) return callback(null, true)                   // server-to-server (no origin)
-    if (allowed.includes(origin)) return callback(null, true)  // whitelisted
+    if (allowed === true) return callback(null, true)
+    if (!origin) return callback(null, true)
+    if (allowed.includes(origin)) return callback(null, true)
     console.warn(`CORS blocked: ${origin}`)
     callback(new Error(`CORS: Origin ${origin} not allowed`))
   },
@@ -96,11 +98,20 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }))
 if (!isProd) {
   app.use(morgan('dev'))
 } else {
-  // Compact production logging
-  app.use(morgan('combined', {
-    skip: (req, res) => res.statusCode < 400, // only log errors in prod
-  }))
+  app.use(morgan('combined', { skip: (req, res) => res.statusCode < 400 }))
 }
+
+// ─── Response caching helper (attach to res for use in routes) ────────────
+// Usage in route: res.setCache(60) → Cache-Control: public, max-age=60
+app.use((req, res, next) => {
+  res.setCache = (seconds) => {
+    res.setHeader('Cache-Control', `public, max-age=${seconds}, stale-while-revalidate=${seconds * 2}`)
+  }
+  res.noCache = () => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  }
+  next()
+})
 
 // ─── Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',         authLimiter, require('./routes/auth'))
@@ -133,7 +144,6 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     success: false,
     message: err.message || 'Internal Server Error',
-    // Only expose stack trace in development
     ...(isProd ? {} : { stack: err.stack }),
   })
 })
@@ -143,7 +153,14 @@ const connectDB = async () => {
   try {
     await mongoose.connect(
       process.env.MONGODB_URI || 'mongodb://localhost:27017/arihant_world',
-      { serverSelectionTimeoutMS: 10000 }
+      {
+        serverSelectionTimeoutMS: 10000,
+        // ✅ Connection pool — handle multiple simultaneous requests
+        maxPoolSize: 10,
+        minPoolSize: 2,
+        socketTimeoutMS: 45000,
+        connectTimeoutMS: 10000,
+      }
     )
     console.log('✅ MongoDB connected')
   } catch (err) {

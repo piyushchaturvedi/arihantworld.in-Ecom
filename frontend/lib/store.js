@@ -2,10 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import Cookies from 'js-cookie'
 
-const ADMIN_SESSION_MINUTES = 30
+// ─── Session config ────────────────────────────────────────────────────────
+const ADMIN_SESSION_MINUTES = 30   // Admin auto-logout: 30 minutes of inactivity
+const USER_SESSION_MINUTES  = 30   // Regular user auto-logout: 30 minutes of inactivity
 const SESSION_KEY = 'arihant-session-ts'
 
-// ─── Security helpers ──────────────────────────────────────
 const getSessionAge = () => {
   if (typeof window === 'undefined') return 0
   const ts = sessionStorage.getItem(SESSION_KEY)
@@ -26,9 +27,13 @@ export const useAuthStore = create(
       user: null, token: null, isAuthenticated: false,
 
       setAuth: (user, token) => {
-        // Cookie: 30 min for admin, 30 days for regular users
-        const expiryDays = user.role === 'admin' ? (30 / 1440) : 30
-        Cookies.set('token', token, { expires: expiryDays, sameSite: 'strict', secure: window.location.protocol === 'https:' })
+        // Admin: 30 min cookie | Regular user: 30 min cookie (session-length)
+        const expiryDays = (30 / 1440) // 30 minutes for all users
+        Cookies.set('token', token, {
+          expires: expiryDays,
+          sameSite: 'strict',
+          secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
+        })
         Cookies.set('userRole', user.role, { expires: expiryDays, sameSite: 'strict' })
         refreshSession()
         set({ user, token, isAuthenticated: true })
@@ -43,17 +48,21 @@ export const useAuthStore = create(
         set({ user: null, token: null, isAuthenticated: false })
       },
 
-      // Check if admin session expired (call on each admin page)
-      checkAdminSession: () => {
+      // Call on every page/activity — auto-logout after 30 min inactivity
+      checkSession: () => {
         const { user, logout } = get()
-        if (!user || user.role !== 'admin') return true // not admin, skip
-        if (getSessionAge() > ADMIN_SESSION_MINUTES) {
+        if (!user) return true
+        const sessionMinutes = USER_SESSION_MINUTES
+        if (getSessionAge() > sessionMinutes) {
           logout()
           return false // expired
         }
         refreshSession() // refresh on activity
         return true // valid
       },
+
+      // Backward compat alias
+      checkAdminSession: () => get().checkSession(),
     }),
     {
       name: 'arihant-auth',
@@ -71,16 +80,16 @@ export const useCartStore = create(
       addItem: (product, qty = 1, variant = null) => {
         set((state) => {
           const key = product._id + (variant || '')
-          const existing = state.items.find(i => (i.productId + (i.variant||'')) === key)
+          const existing = state.items.find(i => (i.productId + (i.variant || '')) === key)
           if (existing) {
-            return { items: state.items.map(i => (i.productId + (i.variant||'')) === key ? { ...i, qty: i.qty + qty } : i) }
+            return { items: state.items.map(i => (i.productId + (i.variant || '')) === key ? { ...i, qty: i.qty + qty } : i) }
           }
           return {
             items: [...state.items, {
               productId: product._id, name: product.name,
               price: product.salePrice || product.price,
               originalPrice: product.price,
-              image: product.images?.find(i=>i.isMain)?.url || product.images?.[0]?.url || null,
+              image: product.images?.find(i => i.isMain)?.url || product.images?.[0]?.url || null,
               category: product.category, icon: product.icon || '🏺',
               slug: product.slug, qty, variant,
             }]
@@ -118,3 +127,41 @@ export const useWishlistStore = create(
     { name: 'arihant-wishlist' }
   )
 )
+
+// ===== SETTINGS STORE (background sync) =====
+// Syncs site settings from API in background. Pages read from here instead of
+// each making their own API call — saves N duplicate network requests.
+export const useSettingsStore = create((set, get) => ({
+  data: null,
+  loaded: false,
+  lastFetched: 0,
+  STALE_MS: 60 * 1000, // re-fetch after 60 seconds
+
+  // Call this once from SettingsProvider; it auto-refreshes every 60s
+  init: async (fetchFn) => {
+    const doFetch = async () => {
+      try {
+        const { data } = await fetchFn()
+        if (data?.settings) {
+          set({ data: data.settings, loaded: true, lastFetched: Date.now() })
+        }
+      } catch {
+        set((s) => ({ ...s, loaded: true })) // mark loaded even on error
+      }
+    }
+
+    // Initial fetch
+    await doFetch()
+
+    // Background refresh every 60 seconds
+    const interval = setInterval(doFetch, 60 * 1000)
+
+    // Return cleanup fn
+    return () => clearInterval(interval)
+  },
+
+  isStale: () => {
+    const { lastFetched, STALE_MS } = get()
+    return Date.now() - lastFetched > STALE_MS
+  },
+}))
