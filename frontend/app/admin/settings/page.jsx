@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { adminAPI } from '@/lib/api'
+import { adminAPI, settingsAPI } from '@/lib/api'
 import { AdminLoader } from '@/components/ui/Loader'
 import toast from 'react-hot-toast'
 
@@ -34,6 +34,11 @@ export default function AdminSettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoInputRef = useRef()
 
+  const [heroImageFile, setHeroImageFile] = useState(null)
+  const [heroImagePreview, setHeroImagePreview] = useState(null)
+  const [uploadingHeroImage, setUploadingHeroImage] = useState(false)
+  const heroImageInputRef = useRef()
+
   useEffect(() => { load() }, [])
 
   const load = async () => {
@@ -53,6 +58,9 @@ export default function AdminSettingsPage() {
     setSaving(true)
     try {
       await adminAPI.updateSettings(config)
+      // Also re-fetch fresh settings so this page reflects what was saved
+      const { data } = await settingsAPI.get()
+      if (data?.settings) setConfig(data.settings)
       toast.success('Settings saved successfully!')
     } catch(err) { toast.error(err.response?.data?.message || 'Failed to save settings') }
     finally { setSaving(false) }
@@ -79,6 +87,28 @@ export default function AdminSettingsPage() {
       setLogoFile(null)
     } catch(err) { toast.error(err.response?.data?.message || 'Logo upload failed') }
     finally { setUploadingLogo(false) }
+  }
+
+  const handleHeroImageSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Hero image must be under 5MB'); return }
+    setHeroImageFile(file)
+    setHeroImagePreview(URL.createObjectURL(file))
+  }
+
+  const handleHeroImageUpload = async () => {
+    if (!heroImageFile) return
+    setUploadingHeroImage(true)
+    try {
+      const fd = new FormData()
+      fd.append('heroImage', heroImageFile)
+      const { data } = await adminAPI.uploadHeroImage(fd)
+      set('heroImageUrl', data.heroImageUrl)
+      toast.success('Hero image uploaded successfully!')
+      setHeroImageFile(null)
+    } catch(err) { toast.error(err.response?.data?.message || err.message || 'Hero image upload failed') }
+    finally { setUploadingHeroImage(false) }
   }
 
 
@@ -249,6 +279,47 @@ export default function AdminSettingsPage() {
                     {config?.pincodeCheckerEnabled !== false ? '✓ Pincode checker is visible on product pages' : '✕ Pincode checker is hidden from product pages'}
                   </div>
                 </div>
+
+                {/* COD Advance Payment Settings */}
+                <div className="border border-amber-200 bg-amber-50 p-4 rounded-sm space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold">📲 COD Advance Payment (UPI)</p>
+                      <p className="text-xs text-amber-600 mt-1">Require customer to pay a % advance via UPI when choosing Cash on Delivery</p>
+                    </div>
+                    <button type="button"
+                      onClick={() => set('codAdvanceEnabled', !config?.codAdvanceEnabled)}
+                      className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors duration-200 ${config?.codAdvanceEnabled ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${config?.codAdvanceEnabled ? 'left-6' : 'left-0.5'}`}/>
+                    </button>
+                  </div>
+                  {config?.codAdvanceEnabled && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="form-label">Advance % of Order Total</label>
+                          <input type="number" min="1" max="50" value={config?.codAdvancePct||10} onChange={e => set('codAdvancePct', Number(e.target.value))} className="form-input" placeholder="10"/>
+                          <p className="text-xs text-gray-400 mt-1">e.g. 10 means customer pays 10% advance via UPI</p>
+                        </div>
+                        <div>
+                          <label className="form-label">Your UPI ID</label>
+                          <input value={config?.codAdvanceUPI||''} onChange={e => set('codAdvanceUPI', e.target.value)} className="form-input font-mono" placeholder="yourname@upi"/>
+                          <p className="text-xs text-gray-400 mt-1">Displayed to customer at checkout</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="form-label">Message shown to customer</label>
+                        <textarea value={config?.codAdvanceMsg||'To confirm your COD order, please pay the advance amount via UPI.'} onChange={e => set('codAdvanceMsg', e.target.value)} className="form-input h-16 resize-none" placeholder="To confirm your COD order, please pay advance via UPI."/>
+                      </div>
+                      <div className="bg-amber-100 border border-amber-300 rounded p-3 text-xs text-amber-800">
+                        <strong>Preview:</strong> Customer selecting COD will see a box asking them to pay ₹<em>[{config?.codAdvancePct||10}% of total]</em> via UPI to <strong>{config?.codAdvanceUPI || 'your-upi@id'}</strong> before order confirmation.
+                      </div>
+                    </div>
+                  )}
+                  <div className={`text-xs px-3 py-2 rounded ${config?.codAdvanceEnabled ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {config?.codAdvanceEnabled ? `✓ COD advance enabled — ${config?.codAdvancePct||10}% advance via UPI required` : '✕ COD advance disabled — full amount collected on delivery'}
+                  </div>
+                </div>
               </>
             )}
 
@@ -321,6 +392,91 @@ export default function AdminSettingsPage() {
               <>
                 <h2 className="font-serif text-xl text-charcoal border-b border-gray-100 pb-3">Homepage Content</h2>
                 <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-3 rounded-sm">These fields control the text shown on your homepage. Save to update live immediately.</p>
+
+                {/* ── Hero Background Image ────────────────────────────────── */}
+                <div className="border border-gray-200 rounded-sm p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <label className="form-label mb-0 text-sm font-semibold">Hero Background Image</label>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Full-screen background image for the "Divine Craftsmanship in Marble" section. Recommended: 1920×1080px, JPG/WebP.</p>
+                    </div>
+                  </div>
+
+                  {/* Current image preview */}
+                  {(heroImagePreview || config?.heroImageUrl) && (
+                    <div className="relative mb-3 rounded overflow-hidden" style={{height: '160px'}}>
+                      <img
+                        src={heroImagePreview || config?.heroImageUrl}
+                        alt="Hero Background"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent flex items-end p-3">
+                        <span className="text-white text-[10px] tracking-widest uppercase">Current Hero Background</span>
+                      </div>
+                      {/* Remove button */}
+                      {config?.heroImageUrl && !heroImagePreview && (
+                        <button
+                          type="button"
+                          onClick={() => { set('heroImageUrl', ''); toast.success('Hero image removed — click Save to apply') }}
+                          className="absolute top-2 right-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded hover:bg-red-600 transition-colors"
+                        >
+                          ✕ Remove
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Upload area */}
+                  <input
+                    ref={heroImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleHeroImageSelect}
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => heroImageInputRef.current?.click()}
+                      className="flex-1 border-2 border-dashed border-gray-300 hover:border-gold rounded-sm py-3 px-4 text-center cursor-pointer transition-colors group"
+                    >
+                      {heroImageFile ? (
+                        <span className="text-xs text-green-600 font-medium">📎 {heroImageFile.name}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400 group-hover:text-gold">
+                          🖼️ Click to choose image (max 5MB)
+                        </span>
+                      )}
+                    </button>
+                    {heroImageFile && (
+                      <button
+                        type="button"
+                        onClick={handleHeroImageUpload}
+                        disabled={uploadingHeroImage}
+                        className="px-4 py-3 bg-gold text-white text-xs tracking-widest uppercase hover:bg-gold-dark transition-all disabled:opacity-60 whitespace-nowrap"
+                      >
+                        {uploadingHeroImage ? 'Uploading…' : '⬆ Upload'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Or paste URL */}
+                  <div className="mt-3">
+                    <label className="text-[10px] text-gray-400 uppercase tracking-widest block mb-1">Or paste image URL directly</label>
+                    <input
+                      type="url"
+                      value={config?.heroImageUrl || ''}
+                      onChange={e => { set('heroImageUrl', e.target.value); setHeroImagePreview('') }}
+                      placeholder="https://example.com/hero-bg.jpg"
+                      className="form-input text-xs"
+                    />
+                  </div>
+
+                  {!config?.heroImageUrl && !heroImagePreview && (
+                    <p className="text-[10px] text-gray-400 mt-2 italic">No image set — hero will show dark gradient background (default)</p>
+                  )}
+                </div>
+
                 <SettingsInput label="Hero Title" fieldKey="heroTitle" type="text" placeholder="Divine Craftsmanship in Marble" value={config?.['heroTitle']} onChange={set}/>
                 <div><label className="form-label">Hero Subtitle</label><textarea value={config?.heroSubtitle||''} onChange={e => set('heroSubtitle',e.target.value)} className="form-input h-20 resize-none"/></div>
                 <div className="grid grid-cols-2 gap-4">
@@ -440,6 +596,178 @@ export default function AdminSettingsPage() {
                     ))}
                     <button type="button" onClick={() => set('faqs',[...(config.faqs||[]),{q:'',a:''}])} className="text-xs text-gold border border-gold/30 px-3 py-1.5 hover:bg-gold/10 transition-all">+ Add FAQ</button>
                   </div>
+                </div>
+
+                {/* ── Temple Spotlight Section ── */}
+                <div className="border-t border-gray-100 pt-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-charcoal">⛩️ Temple Spotlight Section</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Section shown between Furniture and Home Decor on homepage</p>
+                    </div>
+                    <button type="button"
+                      onClick={() => set('templeSectionEnabled', config?.templeSectionEnabled === false ? true : false)}
+                      className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors duration-200 ${config?.templeSectionEnabled !== false ? 'bg-gold' : 'bg-gray-300'}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${config?.templeSectionEnabled !== false ? 'left-6' : 'left-0.5'}`}/>
+                    </button>
+                  </div>
+
+                  {config?.templeSectionEnabled !== false && (
+                    <div className="bg-stone/10 border border-stone rounded-sm p-4 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <SettingsInput label="Section Title" fieldKey="templeSectionTitle" placeholder="Sacred Home Temples" value={config?.templeSectionTitle} onChange={set}/>
+                        <SettingsInput label="CTA Button Text" fieldKey="templeSectionCTA" placeholder="Explore Temples" value={config?.templeSectionCTA} onChange={set}/>
+                      </div>
+                      <div>
+                        <label className="form-label">Section Subtitle</label>
+                        <textarea value={config?.templeSectionSubtitle||''} onChange={e => set('templeSectionSubtitle',e.target.value)} className="form-input h-16 resize-none" placeholder="Handcrafted home mandirs in premium Makrana marble…"/>
+                      </div>
+                      <SettingsInput label="CTA Link (e.g. /category/temples)" fieldKey="templeSectionCTALink" placeholder="/category/temples" value={config?.templeSectionCTALink} onChange={set}/>
+
+                      {/* Temple images */}
+                      <div>
+                        <label className="form-label mb-2">Temple Images (up to 3)</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {[0,1,2].map(i => {
+                            const imgUrl = config?.templeSectionImages?.[i]?.url || ''
+                            const labels = ['Main (tall left)', 'Top right', 'Bottom right']
+                            return (
+                              <div key={i} className="border border-gray-200 rounded-sm overflow-hidden">
+                                <div className="aspect-video bg-stone/20 flex items-center justify-center relative overflow-hidden">
+                                  {imgUrl
+                                    ? <img src={imgUrl} alt="" className="w-full h-full object-cover"/>
+                                    : <div className="text-center text-gray-300"><div className="text-3xl mb-1">⛩️</div><p className="text-[10px]">No image</p></div>}
+                                  {imgUrl && (
+                                    <button type="button"
+                                      onClick={() => { const arr=[...((config?.templeSectionImages)||[{url:'',alt:''},{url:'',alt:''},{url:'',alt:''}])]; arr[i]={url:'',alt:''}; set('templeSectionImages',arr) }}
+                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hover:bg-red-600">✕</button>
+                                  )}
+                                </div>
+                                <div className="p-2 space-y-2">
+                                  <p className="text-[10px] tracking-widest uppercase text-gray-400">{labels[i]}</p>
+                                  <label className="flex items-center gap-2 px-2 py-1.5 border border-dashed border-stone cursor-pointer hover:border-gold transition-colors text-xs text-gray-500 hover:text-gold">
+                                    <input type="file" accept="image/*" className="hidden"
+                                      onChange={async (e) => {
+                                        const file = e.target.files[0]
+                                        if (!file) return
+                                        const fd = new FormData(); fd.append('image', file)
+                                        try {
+                                          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+                                          const BASE_URL = API_URL.replace(/\/api$/, '')
+                                          const res = await fetch(`${BASE_URL}/api/admin/products/upload-image`, {
+                                            method:'POST', headers:{ Authorization:`Bearer ${document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('token='))?.split('=')[1]||''}` }, body:fd
+                                          })
+                                          const data = await res.json()
+                                          if (data.url) {
+                                            const arr=[...((config?.templeSectionImages)||[{url:'',alt:''},{url:'',alt:''},{url:'',alt:''}])]
+                                            if(!arr[i]) arr[i]={url:'',alt:''}
+                                            arr[i].url = data.url
+                                            set('templeSectionImages',arr)
+                                          }
+                                        } catch { alert('Upload failed') }
+                                      }}/>
+                                    📁 Upload
+                                  </label>
+                                  <input value={imgUrl} onChange={e => { const arr=[...((config?.templeSectionImages)||[{url:'',alt:''},{url:'',alt:''},{url:'',alt:''}])]; if(!arr[i]) arr[i]={url:'',alt:''}; arr[i].url=e.target.value; set('templeSectionImages',arr) }}
+                                    className="form-input text-xs w-full" placeholder="Or paste image URL"/>
+                                  <input value={config?.templeSectionImages?.[i]?.alt||''} onChange={e => { const arr=[...((config?.templeSectionImages)||[{url:'',alt:''},{url:'',alt:''},{url:'',alt:''}])]; if(!arr[i]) arr[i]={url:'',alt:''}; arr[i].alt=e.target.value; set('templeSectionImages',arr) }}
+                                    className="form-input text-xs w-full" placeholder="Alt text"/>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Luxury Living Custom Section ── */}
+                <div className="border-t border-gray-100 pt-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-charcoal">🏛️ Luxury Living Section</p>
+                      <p className="text-xs text-gray-400 mt-0.5">4-card custom section on homepage — each card links to any URL (e.g. arihantdivinearts.com)</p>
+                    </div>
+                    <button type="button"
+                      onClick={() => set('luxurySectionEnabled', !config?.luxurySectionEnabled)}
+                      className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors duration-200 ${config?.luxurySectionEnabled ? 'bg-gold' : 'bg-gray-300'}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${config?.luxurySectionEnabled ? 'left-6' : 'left-0.5'}`}/>
+                    </button>
+                  </div>
+
+                  {config?.luxurySectionEnabled && (
+                    <div className="bg-stone/10 border border-stone rounded-sm p-4 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <SettingsInput label="Badge Text (e.g. Luxury Living)" fieldKey="luxurySectionBadge" placeholder="Luxury Living" value={config?.luxurySectionBadge} onChange={set}/>
+                        <SettingsInput label="Title (plain)" fieldKey="luxurySectionTitle" placeholder="Shop" value={config?.luxurySectionTitle} onChange={set}/>
+                        <SettingsInput label="Title (italic part)" fieldKey="luxurySectionTitleItalic" placeholder="Furniture" value={config?.luxurySectionTitleItalic} onChange={set}/>
+                      </div>
+
+                      <div>
+                        <label className="form-label mb-2">Cards (exactly 4 shown)</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {[0,1,2,3].map(i => {
+                            const defaultCards = [
+                              { title:'Marble Coffee Tables', subtitle:'Handcrafted elegance', imageUrl:'', redirectUrl:'https://arihantdivinearts.com/' },
+                              { title:'Dining Sets', subtitle:'Premium inlay work', imageUrl:'', redirectUrl:'https://arihantdivinearts.com/' },
+                              { title:'Console Tables', subtitle:'Classic artistry', imageUrl:'', redirectUrl:'https://arihantdivinearts.com/' },
+                              { title:'Side Tables', subtitle:'Timeless beauty', imageUrl:'', redirectUrl:'https://arihantdivinearts.com/' },
+                            ]
+                            const cards = config?.luxurySectionCards?.length >= 4 ? config.luxurySectionCards : defaultCards
+                            const card = cards[i] || defaultCards[i]
+                            const updateCard = (field, val) => {
+                              const arr = [...(config?.luxurySectionCards?.length >= 4 ? config.luxurySectionCards : defaultCards)]
+                              arr[i] = { ...arr[i], [field]: val }
+                              set('luxurySectionCards', arr)
+                            }
+                            return (
+                              <div key={i} className="border border-gray-200 rounded-sm p-3 space-y-2 bg-white">
+                                <p className="text-[10px] tracking-widests uppercase text-gray-400 font-semibold">Card {i+1}</p>
+                                <div className="aspect-video bg-stone/20 flex items-center justify-center relative overflow-hidden rounded-sm">
+                                  {card.imageUrl
+                                    ? <img src={card.imageUrl} alt="" className="w-full h-full object-cover"/>
+                                    : <div className="text-center text-gray-300"><div className="text-3xl mb-1">🏛️</div><p className="text-[10px]">No image</p></div>
+                                  }
+                                  {card.imageUrl && (
+                                    <button type="button" onClick={() => updateCard('imageUrl', '')}
+                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hover:bg-red-600">✕</button>
+                                  )}
+                                </div>
+                                <label className="flex items-center gap-2 px-2 py-1.5 border border-dashed border-stone cursor-pointer hover:border-gold transition-colors text-xs text-gray-500 hover:text-gold">
+                                  <input type="file" accept="image/*" className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files[0]
+                                      if (!file) return
+                                      const fd = new FormData(); fd.append('image', file)
+                                      try {
+                                        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+                                        const BASE_URL = API_URL.replace(/\/api$/, '')
+                                        const res = await fetch(`${BASE_URL}/api/admin/products/upload-image`, {
+                                          method:'POST', headers:{ Authorization:`Bearer ${document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('token='))?.split('=')[1]||''}` }, body:fd
+                                        })
+                                        const data = await res.json()
+                                        if (data.url) updateCard('imageUrl', data.url)
+                                        else alert('Upload failed')
+                                      } catch { alert('Upload failed') }
+                                    }}/>
+                                  📁 Upload Image
+                                </label>
+                                <input value={card.imageUrl||''} onChange={e => updateCard('imageUrl', e.target.value)}
+                                  className="form-input text-xs w-full" placeholder="Or paste image URL"/>
+                                <input value={card.title||''} onChange={e => updateCard('title', e.target.value)}
+                                  className="form-input text-xs w-full" placeholder="Card Title"/>
+                                <input value={card.subtitle||''} onChange={e => updateCard('subtitle', e.target.value)}
+                                  className="form-input text-xs w-full" placeholder="Card Subtitle (optional)"/>
+                                <input value={card.redirectUrl||''} onChange={e => updateCard('redirectUrl', e.target.value)}
+                                  className="form-input text-xs w-full" placeholder="Redirect URL (e.g. https://arihantdivinearts.com/)"/>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

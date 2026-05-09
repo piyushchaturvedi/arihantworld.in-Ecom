@@ -84,10 +84,14 @@ export const useCartStore = create(
           if (existing) {
             return { items: state.items.map(i => (i.productId + (i.variant || '')) === key ? { ...i, qty: i.qty + qty } : i) }
           }
+          // Only show discount if salePrice is strictly less than price (real discount)
+          const sellingPrice  = product.salePrice && product.salePrice < product.price
+            ? product.salePrice
+            : product.price
           return {
             items: [...state.items, {
               productId: product._id, name: product.name,
-              price: product.salePrice || product.price,
+              price: sellingPrice,
               originalPrice: product.price,
               image: product.images?.find(i => i.isMain)?.url || product.images?.[0]?.url || null,
               category: product.category, icon: product.icon || '🏺',
@@ -97,17 +101,37 @@ export const useCartStore = create(
         })
       },
 
-      updateQty: (productId, qty) => {
-        if (qty < 1) { get().removeItem(productId); return }
-        set((s) => ({ items: s.items.map(i => i.productId === productId ? { ...i, qty } : i) }))
+      updateQty: (productId, qty, variant = null) => {
+        if (qty < 1) { get().removeItem(productId, variant); return }
+        set((s) => ({
+          items: s.items.map(i =>
+            i.productId === productId && (i.variant || null) === (variant || null)
+              ? { ...i, qty }
+              : i
+          )
+        }))
       },
 
-      removeItem: (productId) => set((s) => ({ items: s.items.filter(i => i.productId !== productId) })),
+      removeItem: (productId, variant = null) => set((s) => ({
+        items: s.items.filter(i =>
+          !(i.productId === productId && (i.variant || null) === (variant || null))
+        )
+      })),
       clearCart: () => set({ items: [], coupon: null, couponDiscount: 0 }),
       applyCoupon: (code, discount) => set({ coupon: code, couponDiscount: discount }),
       removeCoupon: () => set({ coupon: null, couponDiscount: 0 }),
     }),
-    { name: 'arihant-cart' }
+    {
+      name: 'arihant-cart',
+      version: 2, // bump version → clears old cart data with wrong originalPrice
+      migrate: (persistedState, version) => {
+        // Version 1 → 2: old items may have wrong originalPrice (base product price
+        // instead of variant price). Safest fix: clear items so user re-adds with
+        // correct prices. Coupon/discount state is also reset.
+        if (version < 2) return { items: [], coupon: null, couponDiscount: 0 }
+        return persistedState
+      },
+    }
   )
 )
 

@@ -56,6 +56,8 @@ export const ordersAPI = {
   create: (data) => api.post('/orders', data),
   cancel: (id, reason) => api.put(`/orders/${id}/cancel`, { reason }),
   initiatePayment: (orderId) => api.post(`/orders/${orderId}/payment`),
+  initiateAdvancePayment: (orderId, { codAdvanceAmount, codAdvancePct } = {}) =>
+    api.post(`/orders/${orderId}/advance-payment`, { codAdvanceAmount, codAdvancePct }),
   verifyPayment: (data) => api.post('/orders/verify-payment', data),
 }
 
@@ -137,6 +139,7 @@ export const adminAPI = {
   getSettings: () => api.get('/admin/settings'),
   updateSettings: (data) => api.put('/admin/settings', data),
   uploadLogo: (formData) => api.post('/admin/settings/upload-logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadHeroImage: (formData) => api.post('/admin/settings/upload-hero-image', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 }
 
 export default api

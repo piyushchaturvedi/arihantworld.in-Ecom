@@ -42,8 +42,27 @@ router.post('/', protect, async (req, res) => {
     for (const item of items) {
       const product = await Product.findById(item.productId)
       if (!product || !product.isActive) return res.status(400).json({ success: false, message: `Product not available` })
-      const price = product.salePrice || product.price
-      validatedItems.push({ product: product._id, name: product.name, image: product.images?.[0]?.url, price, originalPrice: product.price, qty: item.qty, variant: item.variant })
+
+      // ── Size variant price: if item has a variant label like "Size: 2 | Polished",
+      //    extract the size and look it up in sizeVariants so the correct per-size
+      //    price is used instead of the product's base price. ──────────────────────
+      let price = product.salePrice || product.price
+      let originalPrice = product.price
+
+      if (product.sizeVariants && product.sizeVariants.length > 0 && item.variant) {
+        // variant label format: "Size: 2" or "Size: 2 | Polished"
+        const sizeMatch = item.variant.match(/Size:\s*([^|]+)/i)
+        if (sizeMatch) {
+          const selectedSize = sizeMatch[1].trim()
+          const sv = product.sizeVariants.find(v => v.size === selectedSize)
+          if (sv) {
+            price = sv.salePrice || sv.price
+            originalPrice = sv.price
+          }
+        }
+      }
+
+      validatedItems.push({ product: product._id, name: product.name, image: product.images?.[0]?.url, price, originalPrice, qty: item.qty, variant: item.variant })
       subtotal += price * item.qty
     }
 
@@ -75,7 +94,12 @@ router.post('/', protect, async (req, res) => {
     const order = await Order.create({
       user: req.user._id, items: validatedItems, shippingAddress,
       pricing: { subtotal, discount: 0, couponDiscount, couponCode: couponCodeApplied, shipping, gst, total },
-      payment: { method: payment?.method || 'razorpay' }, notes,
+      payment: {
+        method: payment?.method || 'razorpay',
+        codAdvanceAmount: (payment?.method === 'cod' && payment?.codAdvanceAmount > 0) ? payment.codAdvanceAmount : 0,
+        codAdvancePct:    (payment?.method === 'cod' && payment?.codAdvancePct > 0)    ? payment.codAdvancePct    : 0,
+      },
+      notes,
       statusHistory: [{ status: 'pending', note: 'Order placed', updatedBy: 'system' }]
     })
 
@@ -119,6 +143,60 @@ router.post('/:id/payment', protect, async (req, res) => {
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
 
+// POST /api/orders/:id/advance-payment — initiate Razorpay for COD advance amount
+router.post('/:id/advance-payment', protect, async (req, res) => {
+  try {
+    const order = await Order.findOne({ _id: req.params.id, user: req.user._id })
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
+    if (order.payment?.method !== 'cod') return res.status(400).json({ success: false, message: 'Not a COD order' })
+
+    // Recalculate advance amount in case it wasn't saved correctly in subdoc
+    let advanceAmount = order.payment?.codAdvanceAmount || 0
+    let advancePct    = order.payment?.codAdvancePct    || 0
+
+    // Fallback: calculate from total if not stored
+    if (advanceAmount <= 0 && req.body?.codAdvancePct > 0) {
+      advancePct    = req.body.codAdvancePct
+      advanceAmount = Math.round((order.pricing?.total || 0) * advancePct / 100)
+    }
+    if (advanceAmount <= 0 && req.body?.codAdvanceAmount > 0) {
+      advanceAmount = req.body.codAdvanceAmount
+    }
+
+    if (advanceAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'No advance amount configured for this order. Enable COD Advance in Admin → Settings → Payments and set a percentage.' })
+    }
+
+    // Update order with advance amount if it wasn't saved
+    if (!order.payment.codAdvanceAmount || order.payment.codAdvanceAmount <= 0) {
+      await Order.findByIdAndUpdate(order._id, {
+        $set: {
+          'payment.codAdvanceAmount': advanceAmount,
+          'payment.codAdvancePct':    advancePct,
+        }
+      })
+    }
+
+    if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'your_razorpay_key_id') {
+      return res.json({ success: true, demo: true, orderId: order._id, orderNumber: order.orderNumber, amount: advanceAmount * 100, advanceAmount })
+    }
+
+    const Razorpay = require('razorpay')
+    const rp = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET })
+    const rpOrder = await rp.orders.create({
+      amount: Math.round(advanceAmount * 100),
+      currency: 'INR',
+      receipt: `${order.orderNumber}-ADV`,
+      notes: { type: 'cod_advance', orderId: order._id.toString(), advancePct: String(advancePct) }
+    })
+    await Order.findByIdAndUpdate(order._id, { $set: { 'payment.razorpayOrderId': rpOrder.id } })
+    res.json({ success: true, razorpayOrderId: rpOrder.id, amount: rpOrder.amount, currency: rpOrder.currency, key: process.env.RAZORPAY_KEY_ID, orderNumber: order.orderNumber, advanceAmount })
+  } catch(err) {
+    console.error('advance-payment error:', err)
+    res.status(500).json({ success: false, message: err.message || 'Advance payment initiation failed' })
+  }
+})
+
 // POST /api/orders/verify-payment
 router.post('/verify-payment', protect, async (req, res) => {
   try {
@@ -148,22 +226,23 @@ router.post('/verify-payment', protect, async (req, res) => {
       const pts = Math.floor(order.pricing.total / 100)
       await User.findByIdAndUpdate(order.user._id || order.user, { $inc: { loyaltyPoints: pts } })
 
-      // Send confirmation email
-      if (order.user?.email) {
-        const itemsHtml = order.items?.map(i => `<tr><td>${i.name}</td><td>${i.qty}</td><td>${fmt(i.price * i.qty)}</td></tr>`).join('') || ''
-        sendEmail({
-          to: order.user.email, templateSlug: 'order_confirmed',
-          variables: {
-            customerName: order.user.firstName,
-            orderNumber: order.orderNumber,
-            total: fmt(order.pricing.total),
-            paymentMethod: order.payment.method,
-            address: `${order.shippingAddress?.line1}, ${order.shippingAddress?.city}`,
-            items: itemsHtml ? `<table class="ot"><thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : '',
-            estimatedDelivery: '7-14 business days'
-          }
-        }).catch(()=>{})
+      // ── Send emails (non-blocking) ────────────────────────────────────────
+      const customer = {
+        firstName: order.user?.firstName || 'Valued Customer',
+        lastName:  order.user?.lastName  || '',
+        email:     order.user?.email     || '',
+        phone:     order.user?.phone     || order.shippingAddress?.phone || '',
       }
+
+      if (customer.email) {
+        // Customer confirmation — use template directly (templateSlug was wrong before)
+        sendEmail.sendEmail(sendEmail.templates.orderConfirmed({ order, customer }))
+          .catch(e => console.error('Email err (customer):', e.message))
+      }
+
+      // Admin notification — always send with full order + size/variant details
+      sendEmail.sendEmail(sendEmail.templates.adminNewOrder({ order, customer }))
+        .catch(e => console.error('Email err (admin):', e.message))
     }
 
     res.json({ success: true, message: 'Payment verified', order })

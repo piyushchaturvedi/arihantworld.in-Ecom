@@ -17,12 +17,12 @@ const PER_PAGE = 8
 
 // ─── Helper: get best image src for a product ────────────────
 function getProductImage(product) {
-  // Try real uploaded images first
-  if (product.images?.length > 0) {
-    const main = product.images.find(i => i.isMain) || product.images[0]
-    if (main?.url && main.url !== 'null' && main.url !== '') return main.url
-  }
-  return null // will fall back to emoji/placeholder
+  if (!product.images?.length) return null
+  const main = product.images.find(i => i.isMain) || product.images[0]
+  if (!main?.url || main.url === 'null' || main.url === '') return null
+  if (main.url.startsWith('http') || main.url.startsWith('https') || main.url.startsWith('data:')) return main.url
+  if (main.url.startsWith('/')) return (process.env.NEXT_PUBLIC_API_URL?.replace('/api','') || 'http://localhost:5000') + main.url
+  return null
 }
 
 // ─── Product Image Component ─────────────────────────────────

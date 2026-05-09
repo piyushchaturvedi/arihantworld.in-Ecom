@@ -16,7 +16,12 @@ const PER_PAGE = 12
 function getProductImg(product) {
   const imgs = product.images || []
   const main = imgs.find(i => i.isMain) || imgs[0]
-  if (main?.url && main.url !== 'null' && (main.url.startsWith('http') || main.url.startsWith('data:'))) return main.url
+  if (!main?.url || main.url === 'null' || main.url === null || main.url === '') return null
+  if (main.url.startsWith('http') || main.url.startsWith('https') || main.url.startsWith('data:')) return main.url
+  if (main.url.startsWith('/')) {
+    const base = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL?.replace('/api','')) || 'http://localhost:5000'
+    return base + main.url
+  }
   return null
 }
 

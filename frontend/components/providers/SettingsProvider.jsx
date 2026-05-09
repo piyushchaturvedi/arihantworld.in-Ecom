@@ -28,6 +28,7 @@ const mergeSettings = (s) => ({
   currency:               s.currency               || '₹',
   freeShippingThreshold:  s.freeShippingThreshold  || 25000,
   gstPercent:             s.gstPercent             || 18,
+  defaultShippingRate:    s.defaultShippingRate     || 350,
   socials: {
     facebook:  s.facebook  || SITE_CONFIG.socials?.facebook,
     instagram: s.instagram || SITE_CONFIG.socials?.instagram,
@@ -35,29 +36,58 @@ const mergeSettings = (s) => ({
     twitter:   s.twitter   || SITE_CONFIG.socials?.twitter,
   },
   gstin: s.gstin || '08AWPPS1234A1Z2',
-  walletMaxUsePct: s.walletMaxUsePct ?? 100,
-  walletEnabled: s.walletEnabled ?? true,
-  walletExpiryDays: s.walletExpiryDays ?? 0,
-  pincodeCheckerEnabled: s.pincodeCheckerEnabled ?? true,
-  onlinePaymentDiscountPct: s.onlinePaymentDiscountPct ?? 5,
+
+  // ── Wallet ──────────────────────────────────────────────────────────────
+  walletMaxUsePct:   s.walletMaxUsePct  ?? 100,
+  walletEnabled:     s.walletEnabled    ?? true,
+  walletExpiryDays:  s.walletExpiryDays ?? 0,
+
+  // ── Payment / Online discount ────────────────────────────────────────────
+  onlinePaymentDiscountPct:     s.onlinePaymentDiscountPct     ?? 5,
   onlinePaymentDiscountEnabled: s.onlinePaymentDiscountEnabled ?? true,
-  onlinePaymentDiscountMsg: s.onlinePaymentDiscountMsg || '🎉 5% instant discount on Online Payment!',
+  onlinePaymentDiscountMsg:     s.onlinePaymentDiscountMsg     || '🎉 5% instant discount on Online Payment!',
+
+  // ── COD Advance Payment ─────────────────────────────────────────────────
+  codAdvanceEnabled: s.codAdvanceEnabled ?? false,
+  codAdvancePct:     s.codAdvancePct     ?? 10,
+  codAdvanceUPI:     s.codAdvanceUPI     || '',
+  codAdvanceMsg:     s.codAdvanceMsg     || 'To confirm your COD order, please pay the advance amount via UPI.',
+
+  // ── Pincode / Consultation ───────────────────────────────────────────────
+  pincodeCheckerEnabled:    s.pincodeCheckerEnabled    ?? true,
+  consultationFormEnabled:  s.consultationFormEnabled  ?? true,
+
+  // ── Announcement bar ────────────────────────────────────────────────────
   announcementBar:    s.announcementBar    || SITE_CONFIG.announcementBar || '',
   announcementActive: s.announcementActive ?? true,
+
+  // ── Temple Spotlight section ─────────────────────────────────────────────
+  templeSectionEnabled:  s.templeSectionEnabled  ?? true,
+  templeSectionTitle:    s.templeSectionTitle    || 'Sacred Home Temples',
+  templeSectionSubtitle: s.templeSectionSubtitle || 'Handcrafted home mandirs in premium Makrana marble — bless your home with divine presence.',
+  templeSectionCTA:      s.templeSectionCTA      || 'Explore Temples',
+  templeSectionCTALink:  s.templeSectionCTALink  || '/category/temples',
+  templeSectionImages:   s.templeSectionImages   || [],
+
+  // ── CMS / Dynamic content ───────────────────────────────────────────────
   stats:        s.stats?.length        ? s.stats        : SITE_CONFIG.stats,
   testimonials: s.testimonials?.length ? s.testimonials : SITE_CONFIG.testimonials,
   process:      s.process?.length      ? s.process      : SITE_CONFIG.process,
   faqs:         s.faqs?.length         ? s.faqs         : SITE_CONFIG.faqs,
   categories:   s.categories?.length   ? s.categories   : SITE_CONFIG.categories,
-  aboutImages: s.aboutImages?.length ? s.aboutImages : [],
+  aboutImages:  s.aboutImages?.length  ? s.aboutImages  : [],
+
+  // ── Hero / About text ───────────────────────────────────────────────────
   heroTitle:    s.heroTitle    || 'Divine Craftsmanship in Marble',
   heroSubtitle: s.heroSubtitle || 'Handcrafted marble murtis, home temples & décor by third-generation artisans. Since 1985.',
   heroCTA1:     s.heroCTA1    || 'Explore Collections',
   heroCTA2:     s.heroCTA2    || 'Our Story',
   heroTagline:  s.heroTagline || 'SINCE 1985 · MAKRANA MARBLE · THIRD-GENERATION ARTISANS',
+  heroImageUrl: s.heroImageUrl || '',
   aboutTitle:   s.aboutTitle  || 'Where Sacred Art Meets Eternity',
   aboutText:    s.aboutText   || '',
   aboutText2:   s.aboutText2  || '',
+
   loaded: true,
 })
 

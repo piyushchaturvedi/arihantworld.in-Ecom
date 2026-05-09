@@ -3,6 +3,7 @@ const router = express.Router()
 const mongoose = require('mongoose')
 const Order = require('../models/Order')
 const Product = require('../models/Product')
+const { invalidateProductCaches } = require('./products')
 const User = require('../models/User')
 const Coupon = require('../models/Coupon')
 const Wallet = require('../models/Wallet')
@@ -79,8 +80,8 @@ router.get('/products', async (req, res) => {
 
 router.post('/products', async (req, res) => {
   try {
-    // images come as JSON array from frontend (already base64 or URLs)
     const product = await Product.create(req.body)
+    invalidateProductCaches()
     res.status(201).json({ success: true, product })
   } catch(err) { res.status(400).json({ success: false, message: err.message }) }
 })
@@ -92,6 +93,7 @@ router.put('/products/:id', async (req, res) => {
     }
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' })
+    invalidateProductCaches()
     res.json({ success: true, product })
   } catch(err) { res.status(400).json({ success: false, message: err.message }) }
 })
@@ -100,27 +102,31 @@ router.delete('/products/:id', async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid product ID' })
     await Product.findByIdAndUpdate(req.params.id, { isActive: false })
+    invalidateProductCaches()
     res.json({ success: true, message: 'Product deactivated' })
   } catch { res.status(500).json({ success: false, message: 'Failed' }) }
 })
 
 // ── Image Upload Route (multipart) ──────────────────────────
 // POST /api/admin/products/upload-images
-// Accepts: multipart/form-data with field "images" (up to 8 files)
-// Returns: array of uploaded image URLs
 router.post('/products/upload-images', uploadMany.array('images', 8), async (req, res) => {
   try {
+    if (!cloudinaryConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Cloudinary not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in your .env file.',
+        setupRequired: true,
+      })
+    }
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No images uploaded' })
     }
     const uploaded = await uploadImages(req.files, 'arihant-world/products')
-    const urls = uploaded.map(u => u.url)
-    const storage = cloudinaryConfigured() ? 'cloudinary' : 'base64'
+    const urls     = uploaded.map(u => u.url)
+    const publicIds = uploaded.map(u => u.publicId)
     res.json({
-      success: true, urls, storage,
-      message: storage === 'cloudinary'
-        ? `${urls.length} image(s) uploaded to Cloudinary`
-        : `${urls.length} image(s) stored as base64. Add CLOUDINARY env vars for permanent storage.`
+      success: true, urls, publicIds,
+      message: `${urls.length} image(s) uploaded to Cloudinary successfully`,
     })
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
@@ -128,9 +134,16 @@ router.post('/products/upload-images', uploadMany.array('images', 8), async (req
 // Single image upload
 router.post('/products/upload-image', upload.single('image'), async (req, res) => {
   try {
+    if (!cloudinaryConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Cloudinary not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in your .env file.',
+        setupRequired: true,
+      })
+    }
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' })
     const result = await uploadImage(req.file.buffer, req.file.mimetype, 'arihant-world/products')
-    res.json({ success: true, url: result.url, storage: result.storage })
+    res.json({ success: true, url: result.url, publicId: result.publicId })
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
 
@@ -167,14 +180,31 @@ router.put('/orders/:id/status', async (req, res) => {
     const order = await Order.findByIdAndUpdate(req.params.id, update, { new: true }).populate('user', 'firstName lastName email phone')
     if (!order) return res.status(404).json({ success: false, message: 'Not found' })
 
-    // Send status emails (non-blocking)
+    // Send status emails (non-blocking) — triggered for every status change
     if (order.user?.email) {
       const sendEmail = require('../utils/sendEmail')
       const customer = { firstName: order.user.firstName, lastName: order.user.lastName, email: order.user.email, phone: order.user.phone }
-      if (status === 'shipped') sendEmail.sendEmail(sendEmail.templates.orderShipped({ order, customer, tracking: order.tracking })).catch(()=>{})
-      if (status === 'delivered') sendEmail.sendEmail(sendEmail.templates.orderDelivered({ order, customer })).catch(()=>{})
+      if (status === 'processing')       sendEmail.sendEmail(sendEmail.templates.orderProcessing({ order, customer })).catch(()=>{})
+      if (status === 'shipped')          sendEmail.sendEmail(sendEmail.templates.orderShipped({ order, customer, tracking: order.tracking })).catch(()=>{})
+      if (status === 'out_for_delivery') sendEmail.sendEmail(sendEmail.templates.orderOutForDelivery({ order, customer })).catch(()=>{})
+      if (status === 'delivered')        sendEmail.sendEmail(sendEmail.templates.orderDelivered({ order, customer })).catch(()=>{})
     }
 
+    res.json({ success: true, order })
+  } catch(err) { res.status(500).json({ success: false, message: err.message }) }
+})
+
+// ─── Mark COD Advance as Received ────────────────────────────────────────────
+router.put('/orders/:id/cod-advance', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
+    if (order.payment?.method !== 'cod') return res.status(400).json({ success: false, message: 'Not a COD order' })
+
+    order.payment.codAdvancePaid = true
+    // Also push a status history note
+    order.statusHistory.push({ status: order.status, note: `COD advance of ₹${order.payment.codAdvanceAmount} received via UPI`, updatedBy: req.user.firstName })
+    await order.save()
     res.json({ success: true, order })
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
@@ -296,6 +326,9 @@ router.get('/settings', async (req, res) => {
 router.put('/settings', async (req, res) => {
   try {
     const s = await SiteSettings.findOneAndUpdate({ key: 'main' }, req.body, { new: true, upsert: true, runValidators: false })
+    // Clear the in-memory settings cache so the next GET returns fresh data
+    const settingsRouter = require('./settings')
+    if (typeof settingsRouter.clearCache === 'function') settingsRouter.clearCache()
     res.json({ success: true, settings: s, message: 'Settings saved' })
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
@@ -306,6 +339,18 @@ router.post('/settings/upload-logo', upload.single('logo'), async (req, res) => 
     const result = await uploadImage(req.file.buffer, req.file.mimetype, 'arihant-world/logos')
     await SiteSettings.findOneAndUpdate({ key: 'main' }, { logoUrl: result.url }, { upsert: true })
     res.json({ success: true, logoUrl: result.url, storage: result.storage, message: result.note || `Logo uploaded via ${result.storage}` })
+  } catch(err) { res.status(500).json({ success: false, message: err.message }) }
+})
+
+router.post('/settings/upload-hero-image', upload.single('heroImage'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' })
+    const result = await uploadImage(req.file.buffer, req.file.mimetype, 'arihant-world/hero')
+    await SiteSettings.findOneAndUpdate({ key: 'main' }, { heroImageUrl: result.url }, { upsert: true })
+    // Clear settings cache so new image shows immediately
+    const settingsRouter = require('./settings')
+    if (typeof settingsRouter.clearCache === 'function') settingsRouter.clearCache()
+    res.json({ success: true, heroImageUrl: result.url, storage: result.storage, message: result.note || `Hero image uploaded via ${result.storage}` })
   } catch(err) { res.status(500).json({ success: false, message: err.message }) }
 })
 

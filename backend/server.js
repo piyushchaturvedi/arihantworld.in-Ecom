@@ -115,7 +115,8 @@ app.use((req, res, next) => {
 
 // ─── Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',         authLimiter, require('./routes/auth'))
-app.use('/api/products',     require('./routes/products'))
+const productsRouter = require('./routes/products')
+app.use('/api/products',     productsRouter)
 app.use('/api/cart',         require('./routes/cart'))
 app.use('/api/orders',       require('./routes/orders'))
 app.use('/api/profile',      require('./routes/profile'))
@@ -171,6 +172,9 @@ const connectDB = async () => {
 
 const PORT = process.env.PORT || 5000
 connectDB().then(() => {
+  // Warm product cache immediately after DB connects
+  productsRouter.warmCache().catch(() => {})
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 API running on port ${PORT}`)
     console.log(`📖 Environment: ${process.env.NODE_ENV}`)

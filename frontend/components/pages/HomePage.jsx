@@ -7,6 +7,74 @@ import { fmt } from '@/lib/config'
 import { productsAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
 
+// ── Mobile Horizontal Slider Wrapper ─────────────────────────────────────────
+// On mobile: horizontal scroll with snap. On desktop: grid.
+function MobileSlider({ children, className = '', darkMode = false }) {
+  const sliderRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const checkScroll = useCallback(() => {
+    const el = sliderRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    const el = sliderRef.current
+    if (!el) return
+    checkScroll()
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    window.addEventListener('resize', checkScroll)
+    return () => { el.removeEventListener('scroll', checkScroll); window.removeEventListener('resize', checkScroll) }
+  }, [checkScroll, children])
+
+  const scroll = (dir) => {
+    const el = sliderRef.current
+    if (!el) return
+    el.scrollBy({ left: dir * (el.clientWidth * 0.75), behavior: 'smooth' })
+  }
+
+  return (
+    <div className="relative">
+      {/* Mobile slider — hidden on lg+ */}
+      <div className="lg:hidden relative">
+        <div
+          ref={sliderRef}
+          className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {Array.isArray(children) ? children.map((child, i) => (
+            <div key={i} className="snap-start flex-shrink-0 w-[72vw] max-w-[280px]">
+              {child}
+            </div>
+          )) : (
+            <div className="snap-start flex-shrink-0 w-[72vw] max-w-[280px]">{children}</div>
+          )}
+        </div>
+        {/* Scroll arrow buttons */}
+        {canScrollLeft && (
+          <button onClick={() => scroll(-1)}
+            className={`absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-10 w-8 h-8 rounded-full shadow-md flex items-center justify-center transition-all ${darkMode ? 'bg-white/10 text-white border border-white/20' : 'bg-white border border-stone text-charcoal'}`}>
+            ‹
+          </button>
+        )}
+        {canScrollRight && (
+          <button onClick={() => scroll(1)}
+            className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-10 w-8 h-8 rounded-full shadow-md flex items-center justify-center transition-all ${darkMode ? 'bg-white/10 text-white border border-white/20' : 'bg-white border border-stone text-charcoal'}`}>
+            ›
+          </button>
+        )}
+      </div>
+      {/* Desktop grid — hidden on mobile */}
+      <div className={`hidden lg:grid ${className}`}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // Fade-in on scroll
 function useFadeIn() {
   useEffect(() => {
@@ -23,8 +91,16 @@ function useFadeIn() {
 function getProductImg(product) {
   const imgs = product.images || []
   const main = imgs.find(i => i.isMain) || imgs[0]
-  if (main?.url && main.url !== 'null' && main.url.startsWith('http')) return main.url
-  if (main?.url && main.url.startsWith('data:')) return main.url
+  if (!main?.url || main.url === 'null' || main.url === null) return null
+  // Accept both http URLs (Cloudinary) and base64 data URLs
+  if (main.url.startsWith('http') || main.url.startsWith('https') || main.url.startsWith('data:')) {
+    return main.url
+  }
+  // Relative URL — prefix with backend base URL
+  if (main.url.startsWith('/')) {
+    const base = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'
+    return base + main.url
+  }
   return null
 }
 
@@ -128,7 +204,7 @@ function CollectionItem({ cat }) {
 // ════════════════════════════════════════════════════════════
 // HOMEPAGE
 // ════════════════════════════════════════════════════════════
-export default function HomePage() {
+export default function HomePage({ prefetchedData = null }) {
   const settings = useSettings()
   useFadeIn()
 
@@ -137,26 +213,31 @@ export default function HomePage() {
   const [email, setEmail] = useState('')
   const handleEmailChange = useCallback((e) => setEmail(e.target.value), [])
 
-  // Products from API — targeted homepage endpoint (4 per category, parallel DB queries)
-  const [murtis,       setMurtis]       = useState([])
-  const [furniture,    setFurniture]    = useState([])
-  const [decor,        setDecor]        = useState([])
-  const [murtiSubcats, setMurtiSubcats] = useState([])
-  const [productsLoading, setProductsLoading] = useState(true)
+  // Products state — prefetchedData se initialize (SSR se aata hai)
+  const [murtis,       setMurtis]       = useState(prefetchedData?.murtis       || [])
+  const [furniture,    setFurniture]    = useState(prefetchedData?.furniture     || [])
+  const [decor,        setDecor]        = useState(prefetchedData?.decor         || [])
+  const [murtiSubcats, setMurtiSubcats] = useState(prefetchedData?.murtiSubcats  || [])
+  const [temples,      setTemples]      = useState(prefetchedData?.temples       || [])
+  const [productsLoading, setProductsLoading] = useState(false)
 
   useEffect(() => {
+    // ALWAYS fetch on client mount — fixes Ctrl+R cache/hydration mismatch.
+    // Prefetcheddata se fast initial render, phir client fetch se images guaranteed aati hain.
     productsAPI.getHomepage()
       .then(({ data }) => {
         if (data.success) {
-          setMurtis(data.murtis      || [])
-          setFurniture(data.furniture || [])
-          setDecor(data.decor         || [])
+          setMurtis(data.murtis         || [])
+          setFurniture(data.furniture   || [])
+          setDecor(data.decor           || [])
           setMurtiSubcats(data.murtiSubcats || [])
+          setTemples(data.temples       || [])
         }
       })
-      .catch(() => {})
-      .finally(() => setProductsLoading(false))
-  }, [])
+      .catch(() => {
+        // API fail hui — prefetchedData already set hai, images rahegi
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Murti tab filter (client-side on only 4-N records already fetched)
   const murtiFiltered = murtiTab === 'all'
@@ -191,13 +272,35 @@ export default function HomePage() {
   return (
     <>
       {/* ── HERO ── */}
-      <section className="hero-bg relative min-h-screen flex items-center overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="absolute border border-gold/30" style={{ width:`${120+i*60}px`, height:`${120+i*60}px`, top:'50%', left:'50%', transform:`translate(-50%,-50%) rotate(${i*15}deg)`, opacity: 1-(i*0.1) }}/>
-          ))}
-        </div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16 lg:pt-32 hero-content">
+      <section
+        className="hero-bg relative min-h-screen flex items-center overflow-hidden"
+        style={settings.heroImageUrl ? {
+          backgroundImage: `url(${settings.heroImageUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        } : {}}
+      >
+        {/* Dark overlay — stronger when image is set so text stays readable */}
+        <div className={`absolute inset-0 ${settings.heroImageUrl
+          ? 'bg-gradient-to-r from-black/80 via-black/60 to-black/30'
+          : 'opacity-[0.03]'} pointer-events-none z-0`}
+        />
+        {/* Decorative rings — only show when no image */}
+        {!settings.heroImageUrl && (
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="absolute border border-gold/30" style={{ width:`${120+i*60}px`, height:`${120+i*60}px`, top:'50%', left:'50%', transform:`translate(-50%,-50%) rotate(${i*15}deg)`, opacity: 1-(i*0.1) }}/>
+            ))}
+          </div>
+        )}
+        {/* Gold vignette overlay on top of image */}
+        {settings.heroImageUrl && (
+          <div className="absolute inset-0 pointer-events-none z-0"
+            style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(184,151,58,0.12) 0%, transparent 60%)' }}
+          />
+        )}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16 lg:pt-32 hero-content">
           <div className="max-w-2xl">
             <div className="flex items-center gap-3 mb-6">
               <span className="w-8 h-px bg-gold"></span>
@@ -221,10 +324,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-40">
+        {/* <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-40 z-10">
           <span className="text-white text-[10px] tracking-[0.3em] uppercase">Scroll</span>
           <div className="w-px h-8 bg-gold animate-pulse"></div>
-        </div>
+        </div> */}
       </section>
 
       {/* ── ABOUT ── */}
@@ -299,12 +402,12 @@ export default function HomePage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <MobileSlider className="grid-cols-4 gap-4 sm:gap-5" darkMode={true}>
             {productsLoading
               ? Array.from({length:4}).map((_,i) => <SkeletonCard key={i}/>)
               : (murtiFiltered.length > 0 ? murtiFiltered : murtis).slice(0,4).map(p => <ProductCard key={p._id} product={p}/>)
             }
-          </div>
+          </MobileSlider>
 
           {!productsLoading && murtis.length === 0 && (
             <div className="text-center py-12 text-stone/40">
@@ -343,12 +446,12 @@ export default function HomePage() {
             </div>
             <Link href="/category/furniture" className="text-gold/80 text-xs tracking-widest uppercase hover:text-gold border border-gold/30 px-4 py-2 hover:bg-gold hover:text-white transition-all">View All →</Link>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <MobileSlider className="grid-cols-4 gap-4 sm:gap-5" darkMode={false}>
             {productsLoading
               ? Array.from({length:4}).map((_,i) => <FurnSkeleton key={i}/>)
               : furniture.slice(0,4).map(p => <FurnitureCard key={p._id} product={p}/>)
             }
-          </div>
+          </MobileSlider>
           {!productsLoading && furniture.length === 0 && (
             <div className="text-center py-10 text-warm/40 text-sm">No furniture products yet.</div>
           )}
@@ -357,6 +460,92 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── LUXURY LIVING CUSTOM SECTION ── */}
+      {settings.luxurySectionEnabled && Array.isArray(settings.luxurySectionCards) && settings.luxurySectionCards.length > 0 && (
+        <section id="luxury-living" className="py-16 sm:py-20 px-4 sm:px-6 bg-cream">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-10 fade-in">
+              <div>
+                <span className="text-gold text-xs tracking-[0.4em] uppercase block mb-2">
+                  {settings.luxurySectionBadge || 'Luxury Living'}
+                </span>
+                <h2 className="font-serif text-4xl sm:text-5xl text-charcoal">
+                  {settings.luxurySectionTitle || 'Shop'}{' '}
+                  <em>{settings.luxurySectionTitleItalic || 'Furniture'}</em>
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
+              {settings.luxurySectionCards.slice(0, 4).map((card, idx) => (
+                <a
+                  key={idx}
+                  href={card.redirectUrl || 'https://arihantdivinearts.com/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="furniture-card group relative block cursor-pointer"
+                >
+                  <div className="furniture-img overflow-hidden">
+                    {card.imageUrl
+                      ? <img src={card.imageUrl} alt={card.title || `Card ${idx+1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+                      : <span className="text-5xl opacity-20">🏛️</span>
+                    }
+                  </div>
+                  <div className="furniture-info">
+                    {card.title && <div className="furniture-name group-hover:text-gold transition-colors">{card.title}</div>}
+                    {card.subtitle && <div className="text-xs text-warm/60 mt-1">{card.subtitle}</div>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── TEMPLE SPOTLIGHT (shows temple products like murti section) ── */}
+      {settings.templeSectionEnabled !== false && (
+        <section id="temples" className="py-16 sm:py-20 px-4 sm:px-6 bg-[#1a1208]">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-10 fade-in">
+              <div>
+                <span className="text-gold text-xs tracking-[0.4em] uppercase block mb-2">Sacred Architecture</span>
+                <h2 className="font-serif text-4xl sm:text-5xl text-white">
+                  {settings.templeSectionTitle
+                    ? settings.templeSectionTitle
+                    : <>Shop <em className="text-gold-light">Home Temples</em></>
+                  }
+                </h2>
+                {settings.templeSectionSubtitle && (
+                  <p className="text-stone/60 mt-2 max-w-md text-sm leading-relaxed">{settings.templeSectionSubtitle}</p>
+                )}
+              </div>
+              <Link
+                href={settings.templeSectionCTALink || '/category/temples'}
+                className="text-gold/80 text-xs tracking-widest uppercase hover:text-gold border border-gold/30 px-4 py-2 hover:bg-gold hover:text-white transition-all">
+                {settings.templeSectionCTA || 'View All Temples'} →
+              </Link>
+            </div>
+            <MobileSlider className="grid-cols-4 gap-4 sm:gap-5" darkMode={true}>
+              {productsLoading
+                ? Array.from({length:4}).map((_,i) => <SkeletonCard key={i}/>)
+                : temples.length > 0
+                  ? temples.slice(0,4).map(p => <ProductCard key={p._id} product={p}/>)
+                  : Array.from({length:4}).map((_,i) => <SkeletonCard key={i}/>)
+              }
+            </MobileSlider>
+            {!productsLoading && temples.length === 0 && (
+              <div className="text-center py-10 text-stone/40 text-sm">No temple products yet.</div>
+            )}
+            <div className="text-center mt-10">
+              <Link
+                href={settings.templeSectionCTALink || '/category/temples'}
+                className="inline-block px-10 py-3.5 border border-gold text-gold text-xs tracking-[0.25em] uppercase hover:bg-gold hover:text-white transition-all">
+                {settings.templeSectionCTA || 'Explore All Temples'}
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── DECOR ── */}
       <section id="decor" className="py-16 sm:py-20 px-4 sm:px-6 bg-[#1a1208]">
@@ -368,12 +557,12 @@ export default function HomePage() {
             </div>
             <Link href="/category/decor" className="text-gold/80 text-xs tracking-widest uppercase hover:text-gold border border-gold/30 px-4 py-2 hover:bg-gold hover:text-white transition-all">View All →</Link>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <MobileSlider className="grid-cols-4 gap-4 sm:gap-5" darkMode={true}>
             {productsLoading
               ? Array.from({length:4}).map((_,i) => <SkeletonCard key={i}/>)
               : decor.slice(0,4).map(p => <ProductCard key={p._id} product={p}/>)
             }
-          </div>
+          </MobileSlider>
           {!productsLoading && decor.length === 0 && (
             <div className="text-center py-10 text-stone/40 text-sm">No décor products yet.</div>
           )}

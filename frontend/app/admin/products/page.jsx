@@ -146,11 +146,16 @@ export default function AdminProductsPage() {
           return item
         }))
       } catch(err) {
+        const isCloudinaryError = err?.response?.data?.setupRequired
+        const errMsg = isCloudinaryError
+          ? 'Cloudinary not configured! .env mein CLOUDINARY_CLOUD_NAME set karo.'
+          : `Upload failed: ${file.name}`
         setImageItems(prev => prev.map(item => {
-          if (item.file === file) return { ...item, uploading: false, error: 'Upload failed' }
+          if (item.file === file) return { ...item, uploading: false, error: isCloudinaryError ? 'Cloudinary not set up' : 'Upload failed' }
           return item
         }))
-        toast.error(`Failed to upload ${file.name}`)
+        toast.error(errMsg, { duration: isCloudinaryError ? 6000 : 3000 })
+        if (isCloudinaryError) break // ek baar error aaya — baaki files try mat karo
       }
     }
     e.target.value = ''

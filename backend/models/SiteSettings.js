@@ -49,6 +49,11 @@ const siteSettingsSchema = new mongoose.Schema({
   walletMaxUsePct: { type: Number, default: 100 }, // max % of order total payable by wallet
   walletEnabled: { type: Boolean, default: true },
   walletExpiryDays: { type: Number, default: 0 }, // 0 = no expiry by default for new credits
+  // COD Advance Payment
+  codAdvanceEnabled: { type: Boolean, default: false }, // require partial UPI advance for COD
+  codAdvancePct: { type: Number, default: 10 },        // % of order total to pay in advance
+  codAdvanceUPI: { type: String, default: '' },         // UPI ID admin configures
+  codAdvanceMsg: { type: String, default: 'To confirm your COD order, please pay the advance amount via UPI.' },
   // Pincode checker
   pincodeCheckerEnabled: { type: Boolean, default: true },
   // Consultation
@@ -111,11 +116,45 @@ const siteSettingsSchema = new mongoose.Schema({
       { url:'', alt:'Arihant World workshop' },
     ]
   },
+  // Temple spotlight section (shown after Furniture on homepage)
+  templeSectionEnabled: { type: Boolean, default: true },
+  templeSectionTitle: { type: String, default: 'Sacred Home Temples' },
+  templeSectionSubtitle: { type: String, default: 'Handcrafted home mandirs in premium Makrana marble — bless your home with divine presence.' },
+  templeSectionCTA: { type: String, default: 'Explore Temples' },
+  templeSectionCTALink: { type: String, default: '/category/temples' },
+  templeSectionImages: {
+    type: [{ url: String, alt: String }],
+    default: [
+      { url: '', alt: 'Home Temple 1' },
+      { url: '', alt: 'Home Temple 2' },
+      { url: '', alt: 'Home Temple 3' },
+    ]
+  },
   heroTitle: { type: String, default: 'Divine Craftsmanship in Marble' },
   heroSubtitle: { type: String, default: 'Handcrafted marble murtis, home temples & décor by third-generation artisans. Since 1985.' },
   heroCTA1: { type: String, default: 'Explore Collections' },
   heroCTA2: { type: String, default: 'Our Story' },
   heroTagline: { type: String, default: 'SINCE 1985 · MAKRANA MARBLE · THIRD-GENERATION ARTISANS' },
+  heroImageUrl: { type: String, default: '' }, // background image for hero section
+  // ── Luxury Living Section (custom 4-card section on homepage) ──
+  luxurySectionEnabled: { type: Boolean, default: false },
+  luxurySectionBadge: { type: String, default: 'Luxury Living' },
+  luxurySectionTitle: { type: String, default: 'Shop' },
+  luxurySectionTitleItalic: { type: String, default: 'Furniture' },
+  luxurySectionCards: {
+    type: [{
+      title: { type: String, default: '' },
+      subtitle: { type: String, default: '' },
+      imageUrl: { type: String, default: '' },
+      redirectUrl: { type: String, default: 'https://arihantdivinearts.com/' },
+    }],
+    default: [
+      { title: 'Marble Coffee Tables', subtitle: 'Handcrafted elegance', imageUrl: '', redirectUrl: 'https://arihantdivinearts.com/' },
+      { title: 'Dining Sets', subtitle: 'Premium inlay work', imageUrl: '', redirectUrl: 'https://arihantdivinearts.com/' },
+      { title: 'Console Tables', subtitle: 'Classic artistry', imageUrl: '', redirectUrl: 'https://arihantdivinearts.com/' },
+      { title: 'Side Tables', subtitle: 'Timeless beauty', imageUrl: '', redirectUrl: 'https://arihantdivinearts.com/' },
+    ]
+  },
   aboutTitle: { type: String, default: 'Where Sacred Art Meets Eternity' },
   aboutText: { type: String, default: 'At Arihant World, every piece is born from the same white Makrana marble that built the Taj Mahal. Our master Shilpa Shastris — hereditary craftsmen — breathe devotion into every chisel stroke, creating heirlooms that carry the sacred energy of tradition.' },
   aboutText2: { type: String, default: 'Guided by Vastu principles and the science of sacred geometry, we don\'t merely make objects — we create spaces that elevate consciousness and invite the divine into your home.' },

@@ -137,7 +137,16 @@ export default function AdminOrdersPage() {
                 <p className="text-xs text-gray-400">{new Date(o.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p>
                 <p className="text-sm font-medium text-gold">{fmt(o.pricing?.total)}</p>
               </div>
-              {o.items?.length > 0 && <p className="text-[10px] text-gray-400 mt-1 truncate">{o.items[0]?.name}{o.items.length>1?` +${o.items.length-1} more`:''}</p>}
+              {o.items?.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  <p className="text-[10px] text-gray-400 truncate">
+                    {o.items[0]?.name}{o.items.length>1?` +${o.items.length-1} more`:''}
+                  </p>
+                  {o.items[0]?.variant && (
+                    <p className="text-[10px] text-gold/80 truncate">{o.items[0].variant}</p>
+                  )}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -209,6 +218,44 @@ export default function AdminOrdersPage() {
                     <p className="font-medium text-charcoal text-sm capitalize">{selected.payment?.method}</p>
                     <span className={`text-[10px] tracking-widests uppercase px-2 py-0.5 mt-1 inline-block ${selected.payment?.status==='paid'?'bg-green-50 text-green-600':'bg-amber-50 text-amber-600'}`}>{selected.payment?.status}</span>
                     {selected.payment?.paidAt && <p className="text-xs text-gray-400 mt-1">{new Date(selected.payment.paidAt).toLocaleDateString('en-IN')}</p>}
+                    {/* COD Advance Section */}
+                    {selected.payment?.method === 'cod' && selected.payment?.codAdvanceAmount > 0 && (
+                      <div className={`mt-3 p-2 rounded text-xs ${selected.payment.codAdvancePaid ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                        <p className="font-semibold text-amber-800 mb-1">📲 COD Advance</p>
+                        <div className="flex justify-between text-amber-700">
+                          <span>Advance ({selected.payment.codAdvancePct}%)</span>
+                          <span className="font-mono font-bold">₹{selected.payment.codAdvanceAmount?.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between text-warm/60 mt-0.5">
+                          <span>Cash on Delivery</span>
+                          <span className="font-mono">₹{((selected.pricing?.total || 0) - (selected.payment.codAdvanceAmount || 0)).toLocaleString('en-IN')}</span>
+                        </div>
+                        {selected.payment.codAdvancePaid
+                          ? <p className="text-green-600 font-semibold mt-1">✓ Advance Received</p>
+                          : (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+                                  const token = localStorage.getItem('token') || sessionStorage.getItem('token')
+                                  const res = await fetch(`${API}/admin/orders/${selected._id}/cod-advance`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                  })
+                                  const data = await res.json()
+                                  if (data.success) {
+                                    setSelected(data.order)
+                                    setOrders(prev => prev.map(o => o._id === data.order._id ? data.order : o))
+                                  }
+                                } catch(e) { alert('Failed to update') }
+                              }}
+                              className="mt-2 w-full py-1.5 bg-amber-500 text-white text-[10px] tracking-widest uppercase hover:bg-amber-600 transition-colors rounded-sm">
+                              ✓ Mark Advance Received
+                            </button>
+                          )
+                        }
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -230,17 +277,30 @@ export default function AdminOrdersPage() {
                   <p className="text-[10px] tracking-widests uppercase text-gray-400 mb-3">Items ({selected.items?.length})</p>
                   <div className="divide-y divide-gray-50">
                     {selected.items?.map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 py-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-stone to-cream border border-stone flex items-center justify-center text-sm flex-shrink-0 overflow-hidden">
-                          {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover"/> : <span className="opacity-30">🏺</span>}
+                      <div key={i} className="flex items-start gap-4 py-4">
+                        {/* Larger product image */}
+                        <div className="w-20 h-20 bg-gradient-to-br from-stone to-cream border border-stone flex items-center justify-center flex-shrink-0 overflow-hidden rounded-sm">
+                          {item.image
+                            ? <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
+                            : <span className="text-3xl opacity-30">🏺</span>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-charcoal">{item.name}</p>
-                          {item.variant && <p className="text-xs text-gray-400">{item.variant}</p>}
+                          <p className="text-sm font-semibold text-charcoal leading-tight">{item.name}</p>
+                          {/* Size / variant shown prominently */}
+                          {item.variant && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.variant.split('|').map((v, vi) => (
+                                <span key={vi} className="inline-flex items-center bg-gold/10 border border-gold/30 text-gold text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-sm">
+                                  {v.trim()}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">Qty: <strong>{item.qty}</strong></p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm text-charcoal">×{item.qty}</p>
-                          <p className="text-sm font-medium text-gold">{fmt(item.price * item.qty)}</p>
+                          <p className="text-sm font-bold text-gold">{fmt(item.price * item.qty)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{fmt(item.price)} each</p>
                         </div>
                       </div>
                     ))}

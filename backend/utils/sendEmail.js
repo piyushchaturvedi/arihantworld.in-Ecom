@@ -66,7 +66,7 @@ const baseTemplate = (content, footerNote = '') => `
     <div class="body">${content}</div>
     <div class="footer">
       <div class="social-links">
-        <a href="https://arihantworld.com">Website</a>
+        <a href="https://arihantdivinearts.in">Website</a>
         <a href="https://instagram.com/arihantworld">Instagram</a>
         <a href="https://facebook.com/arihantworld">Facebook</a>
       </div>
@@ -90,20 +90,26 @@ const templates = {
       <h2 class="greeting">Namaste, ${customer.firstName}! 🙏</h2>
       <p>Thank you for your order. We've received it and our master artisans are preparing your sacred piece with great care.</p>
       <div class="info-box">
-        <p><strong>Order Number:</strong> #${order.orderNumber}</p>
-        <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}</p>
-        <p><strong>Payment:</strong> ${order.payment?.method?.toUpperCase() || 'ONLINE'} – <span style="color:#22c55e">✓ Confirmed</span></p>
+        <p><strong>Order Number:</strong> <span style="font-size:16px;color:#b8973a;font-weight:bold;">#${order.orderNumber}</span></p>
+        <p><strong>Order Date:</strong> ${new Date(order.createdAt||Date.now()).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}</p>
+        <p><strong>Payment:</strong> ${(order.payment?.method||'ONLINE').toUpperCase()} – <span style="color:#22c55e">✓ Confirmed</span></p>
+        ${order.payment?.codAdvanceAmount > 0 ? `<p><strong>Advance Paid:</strong> ₹${order.payment.codAdvanceAmount.toLocaleString('en-IN')} · Cash on delivery: ₹${((order.pricing?.total||0) - order.payment.codAdvanceAmount).toLocaleString('en-IN')}</p>` : ''}
       </div>
       <table class="order-table">
-        <thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead>
+        <thead><tr><th>Item</th><th>Size / Variant</th><th>Qty</th><th>Amount</th></tr></thead>
         <tbody>
-          ${(order.items||[]).map(i => `<tr><td>${i.name}</td><td>${i.qty}</td><td>₹${(i.price*i.qty).toLocaleString('en-IN')}</td></tr>`).join('')}
-          <tr class="total-row"><td colspan="2"><strong>Total</strong></td><td><span class="amount">₹${(order.pricing?.total||0).toLocaleString('en-IN')}</span></td></tr>
+          ${(order.items||[]).map(i => `<tr>
+            <td>${i.name}</td>
+            <td style="color:#b8973a;font-size:12px;">${i.variant||'Standard'}</td>
+            <td style="text-align:center;">${i.qty}</td>
+            <td>₹${((i.price||0)*(i.qty||1)).toLocaleString('en-IN')}</td>
+          </tr>`).join('')}
+          <tr class="total-row"><td colspan="3"><strong>Total</strong></td><td><span class="amount">₹${(order.pricing?.total||0).toLocaleString('en-IN')}</span></td></tr>
         </tbody>
       </table>
       <p><strong>Delivery to:</strong> ${order.shippingAddress?.name}, ${order.shippingAddress?.line1}, ${order.shippingAddress?.city}, ${order.shippingAddress?.state} – ${order.shippingAddress?.pincode}</p>
       <p>Estimated crafting + delivery: <strong>7–21 business days</strong>. We'll send you a tracking link once your order ships.</p>
-      <a href="https://arihantworld.com/orders" class="btn">Track Your Order</a>
+      <a href="${process.env.FRONTEND_URL||'https://arihantdivinearts.in'}/orders" class="btn">Track Your Order</a>
       <p style="font-size:13px;color:#9a8a70;">Questions? Reply to this email or WhatsApp us at +91 98765 43210</p>
     `, 'This is an automated order confirmation email.')
   }),
@@ -123,7 +129,7 @@ const templates = {
       </div>
       ${tracking?.trackingUrl ? `<a href="${tracking.trackingUrl}" class="btn">Track Your Package</a>` : ''}
       <p>Please ensure someone is available to receive the package. Handle with care – your marble piece is fragile!</p>
-      <a href="https://arihantworld.com/orders" class="btn">View Order Details</a>
+      <a href="https://arihantdivinearts.in/orders" class="btn">View Order Details</a>
     `, 'This is a shipping notification email.')
   }),
 
@@ -138,10 +144,46 @@ const templates = {
         <p><strong>Order:</strong> #${order.orderNumber}</p>
         <p>If you love your piece, we'd be grateful for a review. It helps other families make the right choice.</p>
       </div>
-      <a href="https://arihantworld.com/orders" class="btn">Write a Review</a>
+      <a href="https://arihantdivinearts.in/orders" class="btn">Write a Review</a>
       <p>If you have any concerns about your order, please reach out within 7 days for our hassle-free returns policy.</p>
       <p style="font-size:12px;color:#9a8a70;">📞 +91 98765 43210 &nbsp;|&nbsp; ✉ arihantdivinearts@gmail.com</p>
     `, 'Delivered notification email.')
+  }),
+
+  // ── TO CUSTOMER: Order processing ────────────────────────────
+  orderProcessing: ({ order, customer }) => ({
+    to: customer.email,
+    subject: `Your Order #${order.orderNumber} is Being Crafted 🏛️ | Arihant World`,
+    html: baseTemplate(`
+      <h2 class="greeting">We're crafting your piece, ${customer.firstName}!</h2>
+      <p>Your order is now being processed and carefully handcrafted by our master artisans. We'll keep you updated every step of the way.</p>
+      <div class="info-box">
+        <p><strong>Order:</strong> #${order.orderNumber}</p>
+        <p><strong>Status:</strong> Processing / Being Crafted</p>
+        <p>Our artisans are working with devotion to perfect every detail of your piece.</p>
+      </div>
+      <a href="https://arihantdivinearts.in/orders" class="btn">Track Your Order</a>
+      <p>If you have any questions, feel free to reach out to us.</p>
+      <p style="font-size:12px;color:#9a8a70;">📞 +91 98765 43210 &nbsp;|&nbsp; ✉ arihantdivinearts@gmail.com</p>
+    `, 'Order processing notification email.')
+  }),
+
+  // ── TO CUSTOMER: Order out for delivery ───────────────────────
+  orderOutForDelivery: ({ order, customer }) => ({
+    to: customer.email,
+    subject: `Out for Delivery! Your Order #${order.orderNumber} Arrives Today 🚚 | Arihant World`,
+    html: baseTemplate(`
+      <h2 class="greeting">Your piece is almost home, ${customer.firstName}! 🚚</h2>
+      <p>Exciting news! Your Arihant World order is out for delivery today. Please ensure someone is available to receive it.</p>
+      <div class="info-box">
+        <p><strong>Order:</strong> #${order.orderNumber}</p>
+        <p><strong>Status:</strong> Out for Delivery</p>
+        <p>⚠️ Please handle with care — your marble piece is fragile and has been packed securely.</p>
+      </div>
+      <a href="https://arihantdivinearts.in/orders" class="btn">View Order Details</a>
+      <p>If you miss the delivery, our courier will attempt again. You can also contact us for assistance.</p>
+      <p style="font-size:12px;color:#9a8a70;">📞 +91 98765 43210 &nbsp;|&nbsp; ✉ arihantdivinearts@gmail.com</p>
+    `, 'Out for delivery notification email.')
   }),
 
   // ── TO CUSTOMER: Welcome / Registration ───────────────────────
@@ -159,7 +201,7 @@ const templates = {
         <li>Use wallet balance for faster checkout</li>
         <li>Request custom bespoke pieces</li>
       </ul>
-      <a href="https://arihantworld.com/products" class="btn">Explore Collections</a>
+      <a href="https://arihantdivinearts.in/products" class="btn">Explore Collections</a>
       <div class="info-box">
         <p>🎁 <strong>Welcome Offer:</strong> Use code <strong>WELCOME500</strong> to get ₹500 off your first order above ₹5,000.</p>
       </div>
@@ -184,26 +226,65 @@ const templates = {
 
   // ── TO ADMIN: New Order ────────────────────────────────────────
   adminNewOrder: ({ order, customer }) => ({
-    to: process.env.EMAIL_USER || 'arihantdivinearts@gmail.com',
-    subject: `🛒 New Order #${order.orderNumber} – ₹${(order.pricing?.total||0).toLocaleString('en-IN')}`,
+    to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER || 'arihantdivinearts@gmail.com',
+    subject: `🛒 New Order #${order.orderNumber} – ₹${(order.pricing?.total||0).toLocaleString('en-IN')} | ${customer.firstName} ${customer.lastName}`,
     html: baseTemplate(`
-      <h2 class="greeting">New Order Received!</h2>
-      <div class="info-box">
-        <p><strong>Order:</strong> #${order.orderNumber}</p>
-        <p><strong>Customer:</strong> ${customer.firstName} ${customer.lastName} (${customer.email})</p>
+      <h2 class="greeting">🛒 New Order Received!</h2>
+      <div class="info-box" style="background:#fff8e8;border-left:4px solid #b8973a;">
+        <p style="font-size:18px;font-weight:bold;color:#b8973a;margin-bottom:8px;">Order #${order.orderNumber}</p>
+        <p><strong>Date &amp; Time:</strong> ${new Date(order.createdAt||Date.now()).toLocaleString('en-IN',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
+        <p><strong>Customer:</strong> ${customer.firstName} ${customer.lastName}</p>
+        <p><strong>Email:</strong> ${customer.email || 'N/A'}</p>
         <p><strong>Phone:</strong> ${customer.phone || order.shippingAddress?.phone || 'N/A'}</p>
-        <p><strong>Payment:</strong> ${order.payment?.method?.toUpperCase()} – <strong style="color:#22c55e;">PAID</strong></p>
-        <p><strong>Total:</strong> <span class="amount">₹${(order.pricing?.total||0).toLocaleString('en-IN')}</span></p>
+        <p><strong>Payment Method:</strong> ${(order.payment?.method||'').toUpperCase()}</p>
+        ${order.payment?.codAdvanceAmount > 0 ? `<p><strong>COD Advance:</strong> ₹${order.payment.codAdvanceAmount.toLocaleString('en-IN')} (${order.payment.codAdvancePct}%)</p>` : ''}
       </div>
+
+      <h3 style="font-family:Georgia,serif;font-size:16px;color:#2a2520;margin:20px 0 10px;">📦 Order Items</h3>
       <table class="order-table">
-        <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th>Size / Variant</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
         <tbody>
-          ${(order.items||[]).map(i => `<tr><td>${i.name}</td><td>${i.qty}</td><td>₹${(i.price*i.qty).toLocaleString('en-IN')}</td></tr>`).join('')}
+          ${(order.items||[]).map((item, idx) => `
+          <tr>
+            <td style="color:#9a8a70;">${idx+1}</td>
+            <td><strong>${item.name||'—'}</strong></td>
+            <td style="color:#b8973a;font-size:12px;">${item.variant || '—'}</td>
+            <td style="text-align:center;">${item.qty}</td>
+            <td>₹${(item.price||0).toLocaleString('en-IN')}</td>
+            <td><strong>₹${((item.price||0)*(item.qty||1)).toLocaleString('en-IN')}</strong></td>
+          </tr>`).join('')}
         </tbody>
       </table>
-      <p><strong>Ship to:</strong> ${order.shippingAddress?.name}, ${order.shippingAddress?.line1}, ${order.shippingAddress?.city}, ${order.shippingAddress?.state} – ${order.shippingAddress?.pincode}</p>
-      ${order.notes ? `<div class="info-box"><p><strong>Customer Note:</strong> ${order.notes}</p></div>` : ''}
-      <a href="https://arihantworld.com/admin/orders" class="btn">Open Admin Panel</a>
+
+      <h3 style="font-family:Georgia,serif;font-size:16px;color:#2a2520;margin:20px 0 10px;">💰 Pricing Breakdown</h3>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <tr><td style="padding:6px 0;color:#5a4a3a;">Subtotal</td><td style="text-align:right;padding:6px 0;">₹${(order.pricing?.subtotal||0).toLocaleString('en-IN')}</td></tr>
+        ${(order.pricing?.couponDiscount||0)>0?`<tr><td style="padding:6px 0;color:#22c55e;">Coupon Discount (${order.pricing?.couponCode||''})</td><td style="text-align:right;padding:6px 0;color:#22c55e;">−₹${(order.pricing.couponDiscount).toLocaleString('en-IN')}</td></tr>`:''}
+        ${(order.pricing?.walletUsed||0)>0?`<tr><td style="padding:6px 0;color:#3b82f6;">Wallet Used</td><td style="text-align:right;padding:6px 0;color:#3b82f6;">−₹${(order.pricing.walletUsed).toLocaleString('en-IN')}</td></tr>`:''}
+        <tr><td style="padding:6px 0;color:#5a4a3a;">Shipping</td><td style="text-align:right;padding:6px 0;">${(order.pricing?.shipping||0)===0?'FREE':'₹'+(order.pricing?.shipping||0).toLocaleString('en-IN')}</td></tr>
+        <tr style="border-top:2px solid #b8973a;"><td style="padding:10px 0;font-size:16px;font-weight:bold;color:#2a2520;">TOTAL</td><td style="text-align:right;padding:10px 0;font-size:18px;font-weight:bold;color:#b8973a;">₹${(order.pricing?.total||0).toLocaleString('en-IN')}</td></tr>
+      </table>
+
+      <h3 style="font-family:Georgia,serif;font-size:16px;color:#2a2520;margin:20px 0 10px;">📍 Delivery Address</h3>
+      <div class="info-box">
+        <p><strong>${order.shippingAddress?.name||''}</strong></p>
+        <p>${order.shippingAddress?.line1||''}${order.shippingAddress?.line2?', '+order.shippingAddress.line2:''}</p>
+        <p>${order.shippingAddress?.city||''}, ${order.shippingAddress?.state||''} – ${order.shippingAddress?.pincode||''}</p>
+        <p>📞 ${order.shippingAddress?.phone||customer.phone||'N/A'}</p>
+      </div>
+
+      ${order.notes ? `<div class="info-box" style="border-left-color:#ef4444;"><p><strong>📝 Customer Note:</strong> ${order.notes}</p></div>` : ''}
+
+      <a href="${process.env.FRONTEND_URL||'http://localhost:3000'}/admin/orders" class="btn" style="margin-top:20px;">Open in Admin Panel →</a>
     `, 'Admin notification – new order placed.')
   }),
 
@@ -222,7 +303,7 @@ const templates = {
         <p><strong>Message:</strong> ${consult.message || 'No message'}</p>
         <p><strong>Time:</strong> ${new Date().toLocaleString('en-IN')}</p>
       </div>
-      <a href="https://arihantworld.com/admin/consultations" class="btn">View in Admin</a>
+      <a href="https://arihantdivinearts.in/admin/consultations" class="btn">View in Admin</a>
     `, 'Admin notification – new consultation request.')
   }),
 
@@ -238,7 +319,7 @@ const templates = {
         <p><strong>New Balance:</strong> ₹${balance.toLocaleString('en-IN')}</p>
       </div>
       <p>Your wallet balance can be used at checkout to pay for your next order.</p>
-      <a href="https://arihantworld.com/wallet" class="btn">View My Wallet</a>
+      <a href="https://arihantdivinearts.in/wallet" class="btn">View My Wallet</a>
     `, 'Wallet credit notification.')
   }),
 }

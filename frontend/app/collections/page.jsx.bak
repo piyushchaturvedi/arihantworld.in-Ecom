@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
@@ -9,15 +9,10 @@ import { productsAPI } from '@/lib/api'
 import { fmt } from '@/lib/config'
 import toast from 'react-hot-toast'
 
-function getProductImg(product) {
-  const imgs = product.images || []
+function getProductImg(p) {
+  const imgs = p.images || []
   const main = imgs.find(i => i.isMain) || imgs[0]
-  if (!main?.url || main.url === 'null' || main.url === null || main.url === '') return null
-  if (main.url.startsWith('http') || main.url.startsWith('https') || main.url.startsWith('data:')) return main.url
-  if (main.url.startsWith('/')) {
-    const base = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL?.replace('/api','')) || 'http://localhost:5000'
-    return base + main.url
-  }
+  if (main?.url && (main.url.startsWith('http') || main.url.startsWith('data:'))) return main.url
   return null
 }
 
@@ -82,29 +77,18 @@ export default function CollectionsPage() {
   const [loading, setLoading] = useState(true)
   const cats = (settings.categories || []).filter(c => c.slug !== 'custom')
 
-  // Client-side cache — avoids re-fetching already loaded tabs
-  const tabCache = useRef({})
-
   useEffect(() => {
     document.title = 'Collections | Arihant World'
     loadProducts()
   }, [activeTab])
 
   const loadProducts = async () => {
-    // Return cached data immediately — no flicker, no spinner
-    if (tabCache.current[activeTab]) {
-      setProducts(tabCache.current[activeTab])
-      setLoading(false)
-      return
-    }
     setLoading(true)
     try {
       const params = { limit:12, sort:'-isFeatured,-totalSold' }
       if (activeTab !== 'all') params.category = activeTab
       const { data } = await productsAPI.getAll(params)
-      const result = data.products || []
-      tabCache.current[activeTab] = result   // cache for this session
-      setProducts(result)
+      setProducts(data.products || [])
     } catch { setProducts([]) }
     finally { setLoading(false) }
   }

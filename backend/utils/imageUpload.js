@@ -1,76 +1,116 @@
 /**
- * Image upload utility
- * - If Cloudinary env vars set → uploads to Cloudinary (permanent)
- * - Otherwise → saves base64 locally (dev/demo mode)
+ * Image Upload Utility — Cloudinary Only
  * 
- * To enable Cloudinary:
- * 1. Sign up at cloudinary.com (free tier: 25 credits/month)
- * 2. Get Cloud Name, API Key, API Secret from Dashboard
- * 3. Add to backend/.env:
- *    CLOUDINARY_CLOUD_NAME=your_cloud
- *    CLOUDINARY_API_KEY=your_key
- *    CLOUDINARY_API_SECRET=your_secret
+ * Base64 DB storage completely removed.
+ * Sabhi images Cloudinary pe upload hongi, DB mein sirf URL store hoga.
+ * 
+ * Setup:
+ *   backend/.env mein add karo:
+ *     CLOUDINARY_CLOUD_NAME=your_actual_cloud_name
+ *     CLOUDINARY_API_KEY=your_api_key
+ *     CLOUDINARY_API_SECRET=your_api_secret
  */
-const cloudinaryConfigured = () =>
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name' &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_KEY !== 'your_api_key'
 
-async function uploadToCloudinary(buffer, mimetype, folder = 'arihant-world') {
-  const cloudinary = require('cloudinary').v2
+const cloudinary = require('cloudinary').v2
+
+function initCloudinary() {
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
+    api_key:    process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure:     true,
   })
+}
+
+function cloudinaryConfigured() {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name' &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  )
+}
+
+/**
+ * Upload a single image buffer to Cloudinary
+ * @param {Buffer} buffer
+ * @param {string} mimetype  e.g. 'image/jpeg'
+ * @param {string} folder    Cloudinary folder
+ * @returns {{ url: string, publicId: string }}
+ */
+async function uploadImage(buffer, mimetype, folder = 'arihant-world/products') {
+  if (!cloudinaryConfigured()) {
+    throw new Error(
+      'Cloudinary not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in your .env file.'
+    )
+  }
+  initCloudinary()
 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image', quality: 'auto', fetch_format: 'auto' },
+      {
+        folder,
+        resource_type: 'image',
+        quality:       'auto:good',
+        fetch_format:  'auto',         // auto webp/avif for browsers that support it
+        flags:         'progressive',  // progressive JPEG
+        transformation: [
+          { width: 1200, height: 1200, crop: 'limit' }, // max 1200px — no upscaling
+        ],
+      },
       (error, result) => {
-        if (error) reject(error)
-        else resolve({ url: result.secure_url, publicId: result.public_id })
+        if (error) return reject(error)
+        resolve({ url: result.secure_url, publicId: result.public_id })
       }
     )
     stream.end(buffer)
   })
 }
 
-async function deleteFromCloudinary(publicId) {
-  if (!cloudinaryConfigured() || !publicId) return
-  const cloudinary = require('cloudinary').v2
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  })
-  return cloudinary.uploader.destroy(publicId)
-}
-
 /**
- * Upload a single image buffer
- * @param {Buffer} buffer - file buffer
- * @param {string} mimetype - e.g. 'image/jpeg'
- * @param {string} folder - cloudinary folder name
- * @returns {{ url: string, publicId?: string, storage: string }}
+ * Upload multiple image files
+ * @param {Array<{buffer, mimetype}>} files
+ * @param {string} folder
+ * @returns {Array<{ url, publicId }>}
  */
-async function uploadImage(buffer, mimetype, folder = 'arihant-world') {
-  if (cloudinaryConfigured()) {
-    const result = await uploadToCloudinary(buffer, mimetype, folder)
-    return { url: result.url, publicId: result.publicId, storage: 'cloudinary' }
-  }
-  // Fallback: base64 data URL (works in dev, not recommended for prod)
-  const b64 = buffer.toString('base64')
-  const url = `data:${mimetype};base64,${b64}`
-  return { url, storage: 'base64', note: 'Set CLOUDINARY env vars for permanent storage' }
-}
-
-/**
- * Upload multiple images
- */
-async function uploadImages(files, folder = 'arihant-world') {
+async function uploadImages(files, folder = 'arihant-world/products') {
   return Promise.all(files.map(f => uploadImage(f.buffer, f.mimetype, folder)))
 }
 
-module.exports = { uploadImage, uploadImages, deleteFromCloudinary, cloudinaryConfigured }
+/**
+ * Upload a base64 data URL string to Cloudinary
+ * Used for migrating existing base64 images stored in DB
+ * @param {string} dataUrl  e.g. 'data:image/jpeg;base64,...'
+ * @param {string} folder
+ */
+async function uploadBase64ToCloudinary(dataUrl, folder = 'arihant-world/products') {
+  if (!cloudinaryConfigured()) throw new Error('Cloudinary not configured')
+  initCloudinary()
+
+  // cloudinary.uploader.upload accepts data URIs directly
+  const result = await cloudinary.uploader.upload(dataUrl, {
+    folder,
+    resource_type: 'image',
+    quality:       'auto:good',
+    fetch_format:  'auto',
+    transformation: [{ width: 1200, height: 1200, crop: 'limit' }],
+  })
+  return { url: result.secure_url, publicId: result.public_id }
+}
+
+/**
+ * Delete image from Cloudinary by publicId
+ */
+async function deleteFromCloudinary(publicId) {
+  if (!cloudinaryConfigured() || !publicId) return
+  initCloudinary()
+  return cloudinary.uploader.destroy(publicId)
+}
+
+module.exports = {
+  uploadImage,
+  uploadImages,
+  uploadBase64ToCloudinary,
+  deleteFromCloudinary,
+  cloudinaryConfigured,
+}

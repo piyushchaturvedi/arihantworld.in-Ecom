@@ -9,7 +9,9 @@
     "dev:debug": "NODE_ENV=development DEBUG=* nodemon server.js",
     "seed": "NODE_ENV=development node utils/seeder.js",
     "seed:prod": "NODE_ENV=production node utils/seeder.js",
-    "lint": "eslint . --ext .js"
+    "lint": "eslint . --ext .js",
+    "migrate:images": "node utils/migrateImages.js",
+    "migrate:images:prod": "NODE_ENV=production node utils/migrateImages.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -98,13 +98,13 @@ export default function CartPage() {
                           {item.variant && <p className="text-xs text-warm/50 mt-1">{item.variant}</p>}
                           <p className="text-[10px] text-warm/40 mt-1">Prices are inclusive of all taxes</p>
                         </div>
-                        <button onClick={() => { removeItem(item.productId); toast('Item removed') }} className="text-warm/30 hover:text-red-500 transition-colors text-lg flex-shrink-0">✕</button>
+                        <button onClick={() => { removeItem(item.productId, item.variant || null); toast('Item removed') }} className="text-warm/30 hover:text-red-500 transition-colors text-lg flex-shrink-0">✕</button>
                       </div>
                       <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
                         <div className="flex items-center border border-stone">
-                          <button onClick={() => updateQty(item.productId, item.qty-1)} className="w-8 h-8 flex items-center justify-center text-warm hover:text-gold hover:bg-stone/40 transition-colors text-xl">−</button>
+                          <button onClick={() => updateQty(item.productId, item.qty-1, item.variant || null)} className="w-8 h-8 flex items-center justify-center text-warm hover:text-gold hover:bg-stone/40 transition-colors text-xl">−</button>
                           <span className="w-10 h-8 flex items-center justify-center text-charcoal text-sm border-x border-stone">{item.qty}</span>
-                          <button onClick={() => updateQty(item.productId, item.qty+1)} className="w-8 h-8 flex items-center justify-center text-warm hover:text-gold hover:bg-stone/40 transition-colors text-xl">+</button>
+                          <button onClick={() => updateQty(item.productId, item.qty+1, item.variant || null)} className="w-8 h-8 flex items-center justify-center text-warm hover:text-gold hover:bg-stone/40 transition-colors text-xl">+</button>
                         </div>
                         <div className="text-right">
                           {item.originalPrice > item.price && <span className="text-warm/40 text-xs line-through mr-2">{fmt(item.originalPrice * item.qty)}</span>}

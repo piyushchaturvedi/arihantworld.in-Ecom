@@ -39,6 +39,9 @@ const orderSchema = new mongoose.Schema({
     razorpayPaymentId: String,
     razorpaySignature: String,
     paidAt: Date,
+    codAdvanceAmount: { type: Number, default: 0 },   // advance UPI amount for COD orders
+    codAdvancePct: { type: Number, default: 0 },       // % of total charged as advance
+    codAdvancePaid: { type: Boolean, default: false }, // admin marks when advance is received
   },
   status: {
     type: String,

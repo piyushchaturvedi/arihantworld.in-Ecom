@@ -62,7 +62,16 @@ export default function ProductDetailPage() {
     setProduct(p)
     // ✅ Load existing reviews from product
     setReviews(p?.reviews || [])
-    setSelectedSize(p?.sizes?.[2] || p?.sizes?.[0] || '18"')
+    // Set default size AND variant together so price shows correctly on initial load
+    const hasVariants = p?.sizeVariants?.length > 0
+    const defaultSize = hasVariants
+      ? (p.sizeVariants[2]?.size || p.sizeVariants[0]?.size)
+      : (p?.sizes?.[2] || p?.sizes?.[0] || '18"')
+    setSelectedSize(defaultSize)
+    if (hasVariants) {
+      const defVariant = p.sizeVariants.find(v => v.size === defaultSize) || p.sizeVariants[0]
+      setSelectedVariant(defVariant || null)
+    }
     setSelectedFinish(Array.isArray(p?.finish) ? p.finish[0] : p?.finish || 'Polished')
 
     if (p?.category) {
@@ -180,7 +189,14 @@ export default function ProductDetailPage() {
   }
 
   const handleAddToCart = () => {
-    addItem({ ...product, selectedSize, selectedFinish }, qty)
+    // Override price with selected variant's price so cart/order total is correct
+    const cartProduct = {
+      ...product,
+      price: selectedVariant ? selectedVariant.price : product.price,
+      salePrice: selectedVariant ? selectedVariant.salePrice : product.salePrice,
+    }
+    const variantLabel = selectedSize ? `Size: ${selectedSize}${selectedFinish ? ` | ${selectedFinish}` : ''}` : selectedFinish || null
+    addItem(cartProduct, qty, variantLabel)
     toast.success(`${product.name} added to cart!`)
   }
 

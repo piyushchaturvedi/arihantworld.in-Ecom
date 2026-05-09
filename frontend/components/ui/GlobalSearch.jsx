@@ -8,7 +8,8 @@ import { fmt } from '@/lib/config'
 
 function getImg(p) {
   const m = p.images?.find(i=>i.isMain) || p.images?.[0]
-  if (m?.url && (m.url.startsWith('http')||m.url.startsWith('data:'))) return m.url
+  if (!m?.url || m.url === 'null' || m.url === '') return null
+  if (m.url.startsWith('http') || m.url.startsWith('https') || m.url.startsWith('data:')) return m.url
   return null
 }
 
